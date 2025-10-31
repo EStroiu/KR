@@ -38,11 +38,13 @@ def _read_puzzle(path: str) -> List[List[int]]:
   for row in grid:
     if len(row) != n:
       raise ValueError(f"Puzzle must be N x N, got row of length {len(row)} for N={n}")
-  # Validate perfect square
+  
+  # Check that the input is perfect square
   b = int(math.isqrt(n))
   if b * b != n:
     raise ValueError(f"N must be a perfect square; got N={n}")
-  # Validate entries
+  
+  # Check that the entries are following the proper format
   for r, row in enumerate(grid):
     for c, v in enumerate(row):
       if v < 0 or v > n:
@@ -78,67 +80,69 @@ def to_cnf(input_path: str) -> Tuple[Iterable[Iterable[int]], int]:
   - num_vars: must be N^3 with N = grid size
   """
   grid = _read_puzzle(input_path)
-  N = len(grid)
-  B = int(math.isqrt(N))
+  GridSize = len(grid) # This is N from the assignment
+  BoxSize = int(math.isqrt(GridSize)) # This is B from the assignment
 
   clauses: List[List[int]] = []
 
-  # 1) Exactly one value per cell
-  for r in range(N):
-    for c in range(N):
-      vars_cell = [var_index(r, c, v, N) for v in range(1, N + 1)]
+  # 1) Basic check => exactly one value per cell
+  for row_index in range(GridSize):
+    for column_index in range(GridSize):
+      vars_cell = [var_index(row_index, column_index, value, GridSize) for value in range(1, GridSize + 1)]
       clauses.extend(exactly_one(vars_cell))
 
-  # 2) Row constraint: for each v and row r, exactly one column c has v
-  for r in range(N):
-    for v in range(1, N + 1):
-      vars_row_v = [var_index(r, c, v, N) for c in range(0, N)]
+  # 2) Main row constraint
+  for row_index in range(GridSize):
+    for value in range(1, GridSize + 1):
+      vars_row_v = [var_index(row_index, column_index, value, GridSize) for column_index in range(0, GridSize)]
       clauses.extend(exactly_one(vars_row_v))
 
-  # 3) Column constraint: for each v and column c, exactly one row r has v
-  for c in range(N):
-    for v in range(1, N + 1):
-      vars_col_v = [var_index(r, c, v, N) for r in range(0, N)]
+  # 3) Main column constraint
+  for column_index in range(GridSize):
+    for value in range(1, GridSize + 1):
+      vars_col_v = [var_index(row_index, column_index, value, GridSize) for row_index in range(0, GridSize)]
       clauses.extend(exactly_one(vars_col_v))
 
-  # 4) Box constraint: for each v and each BxB box, exactly one cell in that box has v
-  for br in range(0, N, B):
-    for bc in range(0, N, B):
-      cells = [(br + dr, bc + dc) for dr in range(B) for dc in range(B)]
-      for v in range(1, N + 1):
-        vars_box_v = [var_index(r, c, v, N) for (r, c) in cells]
+  # 4) Main box constraint
+  for box_row_index in range(0, GridSize, BoxSize):
+    for box_column_index in range(0, GridSize, BoxSize):
+      cells = [(box_row_index + dr, box_column_index + dc) for dr in range(BoxSize) for dc in range(BoxSize)]
+      for value in range(1, GridSize + 1):
+        vars_box_v = [var_index(row_index, column_index, value, GridSize) for (row_index, column_index) in cells]
         clauses.extend(exactly_one(vars_box_v))
 
-  # 5) Non-consecutive rule: orthogonal neighbors cannot differ by 1
+  # 5) Additional non-consecutive rule => orthogonal neighbors cannot differ by 1
   # We'll add constraints only to the right and down neighbors to avoid duplicates
-  for r in range(N):
-    for c in range(N):
-      # Right neighbor
-      if c + 1 < N:
-        rp, cp = r, c + 1
-        for v in range(1, N + 1):
-          if v + 1 <= N:
-            clauses.append([-var_index(r, c, v, N), -var_index(rp, cp, v + 1, N)])
-          if v - 1 >= 1:
-            clauses.append([-var_index(r, c, v, N), -var_index(rp, cp, v - 1, N)])
-      # Down neighbor
-      if r + 1 < N:
-        rp, cp = r + 1, c
-        for v in range(1, N + 1):
-          if v + 1 <= N:
-            clauses.append([-var_index(r, c, v, N), -var_index(rp, cp, v + 1, N)])
-          if v - 1 >= 1:
-            clauses.append([-var_index(r, c, v, N), -var_index(rp, cp, v - 1, N)])
+  for row_index in range(GridSize):
+    for column_index in range(GridSize):
+      
+      # The right neighbor
+      if column_index + 1 < GridSize:
+        row_neighbors_position, current_position = row_index, column_index + 1
+        for value in range(1, GridSize + 1):
+          if value + 1 <= GridSize:
+            clauses.append([-var_index(row_index, column_index, value, GridSize), -var_index(row_neighbors_position, current_position, value + 1, GridSize)])
+          if value - 1 >= 1:
+            clauses.append([-var_index(row_index, column_index, value, GridSize), -var_index(row_neighbors_position, current_position, value - 1, GridSize)])
+      
+      # The down neighbor
+      if row_index + 1 < GridSize:
+        row_neighbors_position, current_position = row_index + 1, column_index
+        for value in range(1, GridSize + 1):
+          if value + 1 <= GridSize:
+            clauses.append([-var_index(row_index, column_index, value, GridSize), -var_index(row_neighbors_position, current_position, value + 1, GridSize)])
+          if value - 1 >= 1:
+            clauses.append([-var_index(row_index, column_index, value, GridSize), -var_index(row_neighbors_position, current_position, value - 1, GridSize)])
 
   # 6) Clues: unit clauses
-  for r in range(N):
-    for c in range(N):
-      v = grid[r][c]
-      if v != 0:
-        # sanity: v in 1..N
-        if not (1 <= v <= N):
-          raise ValueError(f"Clue at ({r},{c}) has value {v} outside 1..{N}")
-        clauses.append([var_index(r, c, v, N)])
+  for row_index in range(GridSize):
+    for column_index in range(GridSize):
+      value = grid[row_index][column_index]
+      if value != 0:
+        # sanity: value in 1..GridSize
+        if not (1 <= value <= GridSize):
+          raise ValueError(f"Clue at ({row_index},{column_index}) has value {value} outside 1..{GridSize}")
+        clauses.append([var_index(row_index, column_index, value, GridSize)])
 
-  num_vars = N ** 3
+  num_vars = GridSize ** 3
   return clauses, num_vars
