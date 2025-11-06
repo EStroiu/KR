@@ -8,8 +8,12 @@ encodes them to CNF, runs `solver.solve_cnf`, and collects metrics and plots.
 Compared with the original script, this version:
  - can generate solved grids locally using randomized backtracking (fast for N=4,9)
  - can create guaranteed-SAT puzzles by masking a solved grid
- - can create guaranteed-UNSAT puzzles by injecting a conflict into a solved grid
+ - can create guaranteed-UNSAT puzzles by injecting a conflict and forcing those conflicting
+     cells to remain visible after masking (guarantees UNSAT labeling)
  - exposes --unsat-proportion to control how many instances are provably unsat
+ - records per-instance ground-truth labels (expected SAT/UNSAT) when known and
+     prints labeled accuracy, a confusion matrix, and performance summaries split by
+     predicted and expected status
 
 Outputs:
   - CSV with one row per instance (outdir/metrics.csv)
