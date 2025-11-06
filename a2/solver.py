@@ -6,10 +6,13 @@ THIS is the file to edit.
 Implement: solve_cnf(clauses) -> (status, model_or_None)
 
 Notes:
-- This file contains a DPLL-style solver with unit propagation,
-  pure literal elimination, and an improved branching heuristic
-  (Jeroslow–Wang). The core search (dp) is implemented iteratively (non-recursive)
-  to avoid recursion limits while preserving the same public API.
+- This file contains a DPLL-style solver with:
+  - unit propagation (to a fixpoint),
+  - pure literal elimination (to a fixpoint), and
+  - an improved branching heuristic (Jeroslow–Wang).
+  The core search (dp) is implemented iteratively (non-recursive) to avoid
+  recursion limits while preserving the same public API so the evaluator can
+  instrument it.
   It prioritizes correctness and clarity so it can be evaluated by the provided script.
 """
 
@@ -18,10 +21,12 @@ from typing import Iterable, List, Tuple, Optional
 from random import choice
 
 
+# For majority of optimizations bellow we took inspiration from original DPLL algorithm,
+# SOURCE: https://en.wikipedia.org/wiki/DPLL_algorithm?utm_source=chatgpt.com
+# and also applied some heuristics.
 def remove_tautologies(clauses: Iterable[Iterable[int]]) -> Tuple[List[List[int]], List[int]]:
-  """Remove clauses that are tautologies (contain x and -x).
-
-  Returns the filtered clauses and a list of variables that appeared in tautologies (for info only).
+  """ 
+  Returns the filtered clauses and a list of variables that appeared in tautologies (for info).
   """
   new_clauses: List[List[int]] = []
   removed: List[int] = []
@@ -30,7 +35,6 @@ def remove_tautologies(clauses: Iterable[Iterable[int]]) -> Tuple[List[List[int]
     s = set(c)
     found_tautology = any((-lit) in s for lit in s)
     if found_tautology:
-      # Track variables involved (no assignment implied)
       removed.extend([abs(l) for l in s])
     else:
       new_clauses.append(c)
@@ -78,13 +82,15 @@ def remove_literal(clauses: Iterable[Iterable[int]], literal: int) -> List[List[
   return new_clauses
 
 
+# SOURCE: https://en.wikipedia.org/wiki/Boolean_satisfiability_algorithm_heuristics?utm_source=chatgpt.com
+# Use of Early branching Heuristics
 def select_literal(clauses: Iterable[Iterable[int]]) -> int:
-  """Pick a branching literal using Jeroslow–Wang (JW) scores.
+  """We pick a branching literal using Jeroslow–Wang (JW) scores.
 
   JW score(l) = sum over clauses c containing l of 2^(-|c|).
   We choose the literal with the maximum JW score. If scores tie, fall back
-  to the first encountered literal. This tends to favor shorter clauses and
-  reduces search depth in practice.
+  to the first encountered literal. This method often chooses shorter clauses and
+  should reduce search depth.
   """
   # Compute JW scores for both polarities independently
   scores: dict[int, float] = {}
@@ -99,35 +105,33 @@ def select_literal(clauses: Iterable[Iterable[int]]) -> int:
       scores[lit] = scores.get(lit, 0.0) + weight
   if not scores:
     # Degenerate case: no literals — shouldn't happen due to terminal checks,
-    # but keep a safe fallback.
+    # but keep just in case.
     return any_literal if any_literal != 0 else 1
 
-  # Choose literal with best score
+  # Finally, choose literal with the best score
   best_lit = max(scores.items(), key=lambda kv: kv[1])[0]
   return best_lit
 
 
 def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> Tuple[str, List[int] | None]:
-  """Iterative (non-recursive) DPLL solver.
-
-  Returns ("SAT", model) or ("UNSAT", None).
+  """Iterative (non-recursive since it can time out otherwise because python moment) DPLL 
+  solver (was explained in the assignment). Returns ("SAT", model) or ("UNSAT", None).
   """
-  # Normalize clauses to list of lists for consistent operations
+  # Normalize clauses to list of lists for consistent operations -> also helps with performance
   current_clauses: List[List[int]] = [list(c) for c in clauses]
   current_model: List[int] = [] if model is None else list(model)
 
-  # Quick terminal checks on the initial input
+  # We checks on the initial input
   if is_empty_set(current_clauses):
     return ("SAT", list(current_model))
   if has_empty_clause(current_clauses):
     return ("UNSAT", None)
 
-  # Local function to push simplifications to a local fixpoint
   def simplify(clauses_in: List[List[int]], model_in: List[int]) -> Tuple[str, Optional[List[List[int]]], Optional[List[int]]]:
     clauses_loc = clauses_in
     model_loc = model_in
 
-    # Unit propagation loop
+    # Our main unit propagation loop
     changed = True
     while changed:
       changed = False
@@ -141,7 +145,7 @@ def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> T
         if has_empty_clause(clauses_loc):
           return ("UNSAT", None, None)
 
-    # Pure literal elimination to a fixpoint
+    # Just pure literal elimination to a fixpoint
     while True:
       found_pure, plit = has_literal(clauses_loc)
       if not found_pure:
@@ -174,12 +178,12 @@ def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> T
   stack: List[Tuple[List[List[int]], List[int], int]] = []
 
   while True:
-    # Simplify to a local fixpoint
+    # 1. Simplify to a local fixpoint
     status, maybe_clauses, maybe_model = simplify(current_clauses, current_model)
     if status == "SAT":
       return ("SAT", maybe_model)
     if status == "UNSAT":
-      # Backtrack
+      # 2. Now Backtrack
       if not stack:
         return ("UNSAT", None)
       current_clauses, current_model, alt_lit = stack.pop()
@@ -209,10 +213,9 @@ def solve_cnf(clauses: Iterable[Iterable[int]], num_vars: int) -> Tuple[str, Lis
   # Preprocess: remove tautologies
   clauses_no_tauts, _tauts = remove_tautologies(clauses)
 
-  # Optional light normalization: remove duplicate literals within each clause
   normalized: List[List[int]] = []
   for c in clauses_no_tauts:
-    # Keep order not important; using set removes duplicates
+    # We use set to remove duplicates
     if not isinstance(c, list):
       c = list(c)
     if len(c) > 1:
@@ -224,13 +227,6 @@ def solve_cnf(clauses: Iterable[Iterable[int]], num_vars: int) -> Tuple[str, Lis
     else:
       normalized.append(c)
 
-  # Delegate to DPLL
-  try:
-    status, model = dp(normalized)
-  except RecursionError:
-    # As a last resort, declare timeout-like UNSAT path instead of crashing.
-    # However, returning UNSAT could be incorrect; better to bubble up SAT/UNSAT.
-    # Since evaluate.py treats exceptions as ERROR, we avoid raising.
-    return ("UNSAT", None)
+  status, model = dp(normalized)
   return status, model
   
