@@ -37,7 +37,7 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass, asdict
-from typing import Callable, Dict, Iterable, List, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Tuple, Set
 
 # Local modules (must exist in the same package)
 import encoder
@@ -62,6 +62,8 @@ class InstanceResult:
     model_cnf_valid: Optional[bool] = None
     model_semantic_valid: Optional[bool] = None
     error: str = ""
+    expected_status: Optional[str] = None  # 'SAT', 'UNSAT', or None/"UNKNOWN"
+    is_correct: Optional[bool] = None     # True/False if expected known, else None
 
 
 # ---------------------------
@@ -215,6 +217,47 @@ def make_unsat_from_solution(grid: List[List[int]], rng: random.Random = None) -
     return new_grid
 
 
+def mask_grid_with_forced(
+    grid: List[List[int]], density: float, forced_cells: Iterable[Tuple[int, int]], rng: Optional[random.Random] = None
+) -> List[List[int]]:
+    """Mask a solved grid but always reveal the given forced_cells as clues.
+
+    Ensures contradictions we intend to expose remain in the puzzle after masking.
+    """
+    if rng is None:
+        rng = random.Random()
+    forced: Set[Tuple[int, int]] = set(forced_cells)
+    n = len(grid)
+    out = [[0] * n for _ in range(n)]
+    for r in range(n):
+        for c in range(n):
+            if (r, c) in forced:
+                out[r][c] = grid[r][c]
+            else:
+                out[r][c] = grid[r][c] if rng.random() < density else 0
+    return out
+
+
+def make_unsat_with_forced_conflict(
+    grid: List[List[int]], rng: Optional[random.Random] = None
+) -> Tuple[List[List[int]], List[Tuple[int, int]]]:
+    """Create an UNSAT-inducing modification and return conflict cells to force as clues.
+
+    We pick a row r and two distinct columns c1, c2 and set new_grid[r][c1] = new_grid[r][c2],
+    creating a duplicate in row r. Returning both (r,c1) and (r,c2) allows masking to keep
+    the contradiction visible, guaranteeing UNSAT.
+    """
+    if rng is None:
+        rng = random.Random()
+    n = len(grid)
+    new_grid = [row[:] for row in grid]
+    r = rng.randrange(n)
+    c1, c2 = rng.sample(range(n), 2)
+    new_grid[r][c1] = new_grid[r][c2]
+    forced = [(r, c1), (r, c2)]
+    return new_grid, forced
+
+
 # ---------------------------
 # Existing helper functions
 # ---------------------------
@@ -308,6 +351,71 @@ def verify_grid_semantics(grid: List[List[int]], clues: List[List[int]]) -> bool
                 return False
 
     return True
+
+
+def clues_have_semantic_conflict(clues: List[List[int]]) -> bool:
+    """Check if the given clues alone already violate Sudoku+non-consecutive rules.
+
+    If True, the puzzle is guaranteed UNSAT; otherwise, it may still be SAT or UNSAT.
+    """
+    N = len(clues)
+    B = int(math.isqrt(N))
+    if B * B != N:
+        return True
+
+    # Values in domain or zero
+    for r in range(N):
+        for c in range(N):
+            v = clues[r][c]
+            if v != 0 and not (1 <= v <= N):
+                return True
+
+    # Row duplicates among non-zero clues
+    for r in range(N):
+        seen = set()
+        for c in range(N):
+            v = clues[r][c]
+            if v == 0:
+                continue
+            if v in seen:
+                return True
+            seen.add(v)
+
+    # Column duplicates among non-zero clues
+    for c in range(N):
+        seen = set()
+        for r in range(N):
+            v = clues[r][c]
+            if v == 0:
+                continue
+            if v in seen:
+                return True
+            seen.add(v)
+
+    # Box duplicates among non-zero clues
+    for br in range(0, N, B):
+        for bc in range(0, N, B):
+            seen = set()
+            for dr in range(B):
+                for dc in range(B):
+                    v = clues[br + dr][bc + dc]
+                    if v == 0:
+                        continue
+                    if v in seen:
+                        return True
+                    seen.add(v)
+
+    # Non-consecutive violations where both neighbours are clues
+    for r in range(N):
+        for c in range(N):
+            v = clues[r][c]
+            if v == 0:
+                continue
+            if r + 1 < N and clues[r + 1][c] != 0 and abs(v - clues[r + 1][c]) == 1:
+                return True
+            if c + 1 < N and clues[r][c + 1] != 0 and abs(v - clues[r][c + 1]) == 1:
+                return True
+    return False
 
 
 # ---------------------------
@@ -435,6 +543,7 @@ def run_one_instance(
     grid: List[List[int]],
     timeout_s: Optional[float],
     tmp_dir: str,
+    expected_status: Optional[str] = None,
 ) -> InstanceResult:
     # Instrument
     counters, originals, wrappers = _make_instrumentation()
@@ -462,11 +571,16 @@ def run_one_instance(
             remove_literal_calls=counters["remove_literal_calls"],
             select_literal_calls=counters["select_literal_calls"],
             error=f"encode: {type(e).__name__}: {e}",
+            expected_status=expected_status,
+            is_correct=None if expected_status is None else False,
         )
 
     n = len(grid)
     n_clues = sum(1 for r in grid for v in r if v != 0)
-    n_clauses = len(list(clauses)) if not isinstance(clauses, list) else len(clauses)
+    # Materialize clauses once if needed to avoid consuming generators multiple times
+    if not isinstance(clauses, list):
+        clauses = list(clauses)
+    n_clauses = len(clauses)
 
     # Solve with timeout
     started = time.perf_counter()
@@ -519,6 +633,11 @@ def run_one_instance(
             model_cnf_valid = False
             model_semantic_valid = False
 
+    # Compute correctness if we have an expected status label
+    is_correct: Optional[bool] = None
+    if expected_status in ("SAT", "UNSAT"):
+        is_correct = (result_status == expected_status)
+
     return InstanceResult(
         size=n,
         clue_density=(n_clues / (n * n)),
@@ -536,6 +655,8 @@ def run_one_instance(
         model_cnf_valid=model_cnf_valid,
         model_semantic_valid=model_semantic_valid,
         error=error_msg,
+        expected_status=expected_status,
+        is_correct=is_correct,
     )
 
 
@@ -548,7 +669,8 @@ def save_csv(rows: List[InstanceResult], path: str) -> None:
                 "size", "clue_density", "n_clues", "num_vars", "n_clauses",
                 "status", "wall_time_s", "dp_calls", "unit_clause_checks",
                 "pure_literal_checks", "remove_literal_calls", "select_literal_calls",
-                "model_len", "model_cnf_valid", "model_semantic_valid", "error"
+                "model_len", "model_cnf_valid", "model_semantic_valid", "error",
+                "expected_status", "is_correct"
             ],
         )
         writer.writeheader()
@@ -677,13 +799,20 @@ def main() -> None:
                 # Decide whether this instance should be guaranteed UNSAT
                 make_unsat = rng.random() < args.unsat_proportion
                 if make_unsat:
-                    conflict_solution = make_unsat_from_solution(base_solution, rng=rng)
-                    grid = mask_grid(conflict_solution, args.clue_density, rng=rng)
+                    # Create a visible contradiction and force those clues to remain
+                    conflict_solution, forced = make_unsat_with_forced_conflict(base_solution, rng=rng)
+                    grid = mask_grid_with_forced(conflict_solution, args.clue_density, forced, rng=rng)
+                    expected = "UNSAT"
                 else:
                     grid = mask_grid(base_solution, args.clue_density, rng=rng)
+                    # Masked from a valid solved grid -> definitely SAT
+                    expected = "SAT"
             else:
                 grid = generate_random_puzzle(n, args.clue_density, rng)
-            res = run_one_instance(grid, args.timeout, tmp_dir)
+                # For random puzzles we can still detect hard conflicts in clues (optional)
+                expected = "UNSAT" if clues_have_semantic_conflict(grid) else None
+
+            res = run_one_instance(grid, args.timeout, tmp_dir, expected_status=expected)
             results.append(res)
             print(f"N={n} [{i+1}/{args.instances_per_size}] -> {res.status} in {res.wall_time_s:.3f}s, clauses={res.n_clauses}")
 
@@ -700,6 +829,35 @@ def main() -> None:
                 print(f"Saved plot -> {p}")
         else:
             print("matplotlib not available; skipped plots.")
+
+    # Accuracy and performance summaries
+    labeled = [r for r in results if r.expected_status in ("SAT", "UNSAT")]
+    if labeled:
+        correct = sum(1 for r in labeled if r.status == r.expected_status)
+        acc = correct / len(labeled)
+        print(f"Labeled accuracy: {correct}/{len(labeled)} = {acc:.3f}")
+
+        # Confusion matrix (expected vs predicted)
+        conf: Dict[str, Dict[str, int]] = {}
+        for r in labeled:
+            exp = r.expected_status or "?"
+            conf.setdefault(exp, {})
+            conf[exp][r.status] = conf[exp].get(r.status, 0) + 1
+        for exp in ("SAT", "UNSAT"):
+            row = conf.get(exp, {})
+            print(f"Expected {exp}: predicted SAT={row.get('SAT',0)}, UNSAT={row.get('UNSAT',0)}, TIMEOUT={row.get('TIMEOUT',0)}, ERROR={row.get('ERROR',0)}")
+
+        # Performance by predicted status
+        for s in ("SAT", "UNSAT"):
+            times = [r.wall_time_s for r in results if r.status == s]
+            if times:
+                print(f"Mean time (predicted {s}): {sum(times)/len(times):.3f}s over {len(times)} instances")
+
+        # Performance by expected status (labeled only)
+        for s in ("SAT", "UNSAT"):
+            times = [r.wall_time_s for r in labeled if r.expected_status == s and r.status in ("SAT","UNSAT")]
+            if times:
+                print(f"Mean time (expected {s}): {sum(times)/len(times):.3f}s over {len(times)} instances")
 
 
 if __name__ == "__main__":
