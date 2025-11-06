@@ -8,22 +8,14 @@ Implement: solve_cnf(clauses) -> (status, model_or_None)
 Notes:
 - This file contains a DPLL-style solver with unit propagation,
   pure literal elimination, and an improved branching heuristic
-  (Jeroslow–Wang). It prioritizes correctness and clarity so it can be
-  evaluated by the provided script.
+  (Jeroslow–Wang). The core search (dp) is implemented iteratively (non-recursive)
+  to avoid recursion limits while preserving the same public API.
+  It prioritizes correctness and clarity so it can be evaluated by the provided script.
 """
 
 
 from typing import Iterable, List, Tuple, Optional
 from random import choice
-import sys
-
-# Avoid RecursionError on deeper search trees (e.g., hard Sudoku instances)
-try:
-  # Use a conservative but larger limit than default (~1000)
-  sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
-except Exception:
-  # If setting recursion limit fails, continue with default
-  pass
 
 
 def remove_tautologies(clauses: Iterable[Iterable[int]]) -> Tuple[List[List[int]], List[int]]:
@@ -116,74 +108,96 @@ def select_literal(clauses: Iterable[Iterable[int]]) -> int:
 
 
 def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> Tuple[str, List[int] | None]:
-  """Recursive DPLL solver.
+  """Iterative (non-recursive) DPLL solver.
 
   Returns ("SAT", model) or ("UNSAT", None).
   """
-  if model is None:
-    model = []
-
   # Normalize clauses to list of lists for consistent operations
-  clauses = [list(c) for c in clauses]
+  current_clauses: List[List[int]] = [list(c) for c in clauses]
+  current_model: List[int] = [] if model is None else list(model)
 
-  # Terminal checks
-  if is_empty_set(clauses):
-    return ("SAT", list(model))
-  if has_empty_clause(clauses):
+  # Quick terminal checks on the initial input
+  if is_empty_set(current_clauses):
+    return ("SAT", list(current_model))
+  if has_empty_clause(current_clauses):
     return ("UNSAT", None)
 
-  # Unit propagation (repeat as long as we find unit clauses)
-  changed = True
-  local_clauses = clauses
-  local_model = list(model)
-  while changed:
-    changed = False
-    found, lit = has_unit_clause(local_clauses)
-    if found:
-      local_clauses = remove_literal(local_clauses, lit)
-      local_model.append(lit)
-      changed = True
-      if is_empty_set(local_clauses):
-        return ("SAT", local_model)
-      if has_empty_clause(local_clauses):
-        return ("UNSAT", None)
+  # Local function to push simplifications to a local fixpoint
+  def simplify(clauses_in: List[List[int]], model_in: List[int]) -> Tuple[str, Optional[List[List[int]]], Optional[List[int]]]:
+    clauses_loc = clauses_in
+    model_loc = model_in
 
-  # Pure literal elimination to a fixpoint
+    # Unit propagation loop
+    changed = True
+    while changed:
+      changed = False
+      found, lit = has_unit_clause(clauses_loc)
+      if found:
+        clauses_loc = remove_literal(clauses_loc, lit)
+        model_loc = model_loc + [lit]
+        changed = True
+        if is_empty_set(clauses_loc):
+          return ("SAT", None, model_loc)
+        if has_empty_clause(clauses_loc):
+          return ("UNSAT", None, None)
+
+    # Pure literal elimination to a fixpoint
+    while True:
+      found_pure, plit = has_literal(clauses_loc)
+      if not found_pure:
+        break
+      clauses_loc = remove_literal(clauses_loc, plit)
+      model_loc = model_loc + [plit]
+      if is_empty_set(clauses_loc):
+        return ("SAT", None, model_loc)
+      if has_empty_clause(clauses_loc):
+        return ("UNSAT", None, None)
+
+    # Another unit propagation pass after PLE
+    changed = True
+    while changed:
+      changed = False
+      found, lit = has_unit_clause(clauses_loc)
+      if found:
+        clauses_loc = remove_literal(clauses_loc, lit)
+        model_loc = model_loc + [lit]
+        changed = True
+        if is_empty_set(clauses_loc):
+          return ("SAT", None, model_loc)
+        if has_empty_clause(clauses_loc):
+          return ("UNSAT", None, None)
+
+    return ("CONTINUE", clauses_loc, model_loc)
+
+  # Each stack frame stores a deferred branch to try upon backtracking:
+  # (clauses_snapshot, model_snapshot, alt_literal)
+  stack: List[Tuple[List[List[int]], List[int], int]] = []
+
   while True:
-    found_pure, plit = has_literal(local_clauses)
-    if not found_pure:
-      break
-    local_clauses = remove_literal(local_clauses, plit)
-    local_model.append(plit)
-    if is_empty_set(local_clauses):
-      return ("SAT", local_model)
-    if has_empty_clause(local_clauses):
-      return ("UNSAT", None)
-
-  # After pure literal eliminations, new unit clauses may appear so we propagate again
-  changed = True
-  while changed:
-    changed = False
-    found, lit = has_unit_clause(local_clauses)
-    if found:
-      local_clauses = remove_literal(local_clauses, lit)
-      local_model.append(lit)
-      changed = True
-      if is_empty_set(local_clauses):
-        return ("SAT", local_model)
-      if has_empty_clause(local_clauses):
+    # Simplify to a local fixpoint
+    status, maybe_clauses, maybe_model = simplify(current_clauses, current_model)
+    if status == "SAT":
+      return ("SAT", maybe_model)
+    if status == "UNSAT":
+      # Backtrack
+      if not stack:
         return ("UNSAT", None)
+      current_clauses, current_model, alt_lit = stack.pop()
+      current_clauses = remove_literal(current_clauses, alt_lit)
+      current_model = current_model + [alt_lit]
+      continue
 
-  # Choose a branching literal
-  lit = select_literal(local_clauses)
+    # Continue search with simplified state
+    current_clauses = maybe_clauses or current_clauses
+    current_model = maybe_model or current_model
 
-  # Try True branch
-  status, m = dp(remove_literal(local_clauses, lit), local_model + [lit])
-  if status == "SAT":
-    return status, m
-
-  # Try False branch
-  return dp(remove_literal(local_clauses, -lit), local_model + [-lit])
+    # Choose a branching literal and push the alternative branch for later
+    lit = select_literal(current_clauses)
+    # Save state to try the opposite polarity later
+    stack.append((current_clauses, current_model, -lit))
+    # Take the chosen branch immediately
+    current_clauses = remove_literal(current_clauses, lit)
+    current_model = current_model + [lit]
 
 def solve_cnf(clauses: Iterable[Iterable[int]], num_vars: int) -> Tuple[str, List[int] | None]:
   """
