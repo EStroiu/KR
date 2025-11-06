@@ -61,8 +61,8 @@ def remove_literal(clauses: Iterable[Iterable[int]], literal: int) -> Iterable[I
 
 
 def select_literal(clauses: Iterable[Iterable[int]]) -> int:
-  literals = set([literal for clause in clauses for literal in clause])
-  return randint(0, len(literals) - 1)
+  literals = list(set([literal for clause in clauses for literal in clause]))
+  return literals[randint(0, len(literals) - 1)]
 
 
 def dp(clauses: Iterable[Iterable[int]]) -> Tuple[str, List[int] | None]:
