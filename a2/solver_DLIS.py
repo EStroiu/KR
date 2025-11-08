@@ -82,7 +82,7 @@ def remove_literal(clauses: Iterable[Iterable[int]], literal: int) -> List[List[
   return new_clauses
 
 
-# SOURCE: lecture slide
+# SOURCE: www.cs.cmu.edu/~emc/15-820A/reading/sat_cmu.pdf
 # Use of Early branching Heuristics
 def select_literal(clauses: Iterable[Iterable[int]]) -> int:
   """We pick a branching literal using MOM's heuristic.
@@ -91,27 +91,20 @@ def select_literal(clauses: Iterable[Iterable[int]]) -> int:
   f*(l) is the number of times l occurss in the smallest no satisfied clauses, and
   k is a tuning aprameter
   """
-  k=1
-  smallest_size = 0
-  smallest_clauses = []
-  for clause in clauses:
-    clause_size = len(clause)
-    if smallest_size == 0:
-      smallest_size = clause_size
-      smallest_clauses.append(clause)
-    elif len(clause_size) < smallest_size:
-      smallest_size = clause_size
-      smallest_clauses = [clause]
-
-  literals = [literal for clause in smallest_clauses for literal in clause]
+  literals = [literal for clause in clauses for literal in clause]
   unique_literals = set([abs(literal) for literal in literals])
-  counts = map(lambda x: (x, literals.count(x), literals.count(-x)), unique_literals)
-  counts = map(lambda x: (x[0], (x[1]+x[2])**(2**k)+(x[1]*x[2]), x[1], x[2]), counts)
-  literal = sorted(counts, key=lambda x: x[1], reverse=True)[0]
-  if literal[2] > literal[3]:
-    return literal[0]
-  else:
-    return -literal[0]
+
+  largest_count = 0
+  largest_literal = 0
+  counts = list(map(lambda x: (x, literals.count(x), literals.count(-x)), unique_literals))
+  for count in counts:
+    if count[1] > largest_count:
+      largest_count = count[2]
+      largest_literal = count[0]
+    else:
+      largest_literal = -abs(largest_literal)
+
+  return largest_literal
 
 
 def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> Tuple[str, List[int] | None]:
