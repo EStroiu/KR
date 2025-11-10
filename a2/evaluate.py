@@ -8,8 +8,13 @@ encodes them to CNF, runs `solver.solve_cnf`, and collects metrics and plots.
 Compared with the original script, this version:
  - can generate solved grids locally using randomized backtracking (fast for N=4,9)
  - can create guaranteed-SAT puzzles by masking a solved grid
- - can create guaranteed-UNSAT puzzles by injecting a conflict into a solved grid
- - exposes --unsat-proportion to control how many instances are provably unsat
+ - can create guaranteed-UNSAT puzzles by injecting a conflict and forcing those conflicting
+     cells to remain visible after masking (guarantees UNSAT labeling)
+ - for suite-mode=sat, selects an exact per-size count of UNSAT instances based on
+     --unsat-proportion (instead of per-instance Bernoulli), ensuring the requested proportion
+ - records per-instance ground-truth labels (expected SAT/UNSAT) when known and
+     prints labeled accuracy, a confusion matrix, and performance summaries split by
+     predicted and expected status
 
 Outputs:
   - CSV with one row per instance (outdir/metrics.csv)
@@ -696,7 +701,8 @@ def try_make_plots(rows: List[InstanceResult], outdir: str) -> List[str]:
         labels = sorted(by_n.keys())
         data = [by_n[n] for n in labels]
         plt.figure(figsize=(6, 4))
-        plt.boxplot(data, labels=[str(l) for l in labels], showfliers=False)
+        # Matplotlib 3.9+ deprecates 'labels' in favor of 'tick_labels'
+        plt.boxplot(data, tick_labels=[str(l) for l in labels], showfliers=False)
         plt.title("Solve time by size (successful runs)")
         plt.xlabel("N")
         plt.ylabel("Seconds")
@@ -794,10 +800,21 @@ def main() -> None:
             except Exception as e:
                 print(f"N={n}: error generating base solution: {e}; falling back to random suite.")
 
+        # For suite-mode=sat, preselect exact UNSAT indices per size so the final
+        # labeled distribution matches --unsat-proportion exactly (rounding applied).
+        unsat_indices: Set[int] = set()
+        if base_solution is not None:
+            m = args.instances_per_size
+            target_unsat = int(round(args.unsat_proportion * m))
+            target_unsat = max(0, min(m, target_unsat))
+            if target_unsat > 0:
+                unsat_indices = set(rng.sample(range(m), target_unsat))
+
         for i in range(args.instances_per_size):
             if base_solution is not None:
                 # Decide whether this instance should be guaranteed UNSAT
-                make_unsat = rng.random() < args.unsat_proportion
+                # Exact selection (not Bernoulli): i in unsat_indices means UNSAT
+                make_unsat = (i in unsat_indices)
                 if make_unsat:
                     # Create a visible contradiction and force those clues to remain
                     conflict_solution, forced = make_unsat_with_forced_conflict(base_solution, rng=rng)
