@@ -17,18 +17,30 @@ Compared with the original script, this version:
      predicted and expected status
 
 Outputs:
-  - CSV with one row per instance (outdir/metrics.csv)
-  - Plots (PNG): time_by_size.png, status_counts.png, time_vs_dp_calls.png
-  - Temporary puzzles stored in outdir/tmp
+    - CSV with one row per instance (outdir/metrics.csv)
+    - Plots (PNG):
+            * time_by_size.png (combined SAT+UNSAT successful runs)
+            * time_by_size_sat.png (SAT only)
+            * time_by_size_unsat.png (UNSAT only)
+            * time_by_size_sat_unsat.png (SAT vs UNSAT side-by-side per size)
+            * status_counts.png
+            * time_vs_dp_calls.png
+    - Temporary puzzles stored in outdir/tmp
 
 Usage examples:
   python3 a2/evaluate.py --sizes 4 9 --instances-per-size 20 --clue-density 0.5 \
       --suite-mode sat --unsat-proportion 0.2 --gen-timeout 10 --timeout 5 --outdir a2/outputs
+    python3 a2/evaluate.py --solver a2/solver_MOM.py --sizes 9 --instances-per-size 5 --clue-density 0.3
+    python3 a2/evaluate.py --solver solver_JW --sizes 4 9 --suite-mode sat --unsat-proportion 0.1
+        python3 a2/evaluate.py --suite-mode folder --puzzle-dir puzzles --solver a2/solver_JW.py --outdir a2/outputs
 
 Note:
  - This script assumes `encoder.py` and your `solver` module (imported as solver_mod)
    are present and compatible with the rest of the code.
  - Generation does not use your solver (avoids gen-timeout failures).
+ - You can select an alternative solver implementation via --solver providing either
+        a module name (e.g. solver_MOM or a2.solver_MOM) or a path to a .py file (e.g. a2/solver_MOM.py).
+ - Suite mode 'folder' evaluates all .txt puzzles in --puzzle-dir (each row space-separated integers; 0 for empty). --sizes and --instances-per-size are ignored in this mode.
 """
 from __future__ import annotations
 
@@ -46,7 +58,40 @@ from typing import Callable, Dict, Iterable, List, Optional, Tuple, Set
 
 # Local modules (must exist in the same package)
 import encoder
-import solver as solver_mod
+# Default solver import; can be overridden by --solver option.
+import solver as solver_mod  # type: ignore
+
+# Dynamic solver loading helper
+import importlib.util
+import importlib
+from types import ModuleType
+
+def load_solver(path_or_name: str) -> ModuleType:
+    """Load a solver module given either a filesystem path to a .py file or a module name.
+
+    Accepts examples like:
+      --solver solver               (regular import by name in PYTHONPATH)
+      --solver a2.solver_MOM        (qualified module name)
+      --solver a2/solver_MOM.py     (filesystem relative path)
+      --solver ./a2/solver_JW.py    (relative path)
+
+    Returns the loaded module object. Raises ImportError / FileNotFoundError on failure.
+    The loaded module must provide solve_cnf(...) plus any optional functions used for instrumentation.
+    """
+    # If it looks like a path (endswith .py or contains a path separator), treat as file path
+    if path_or_name.endswith('.py') or os.sep in path_or_name:
+        path = os.path.abspath(path_or_name)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"Solver file not found: {path}")
+        module_name = os.path.splitext(os.path.basename(path))[0]
+        spec = importlib.util.spec_from_file_location(module_name, path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Could not create import spec for solver at {path}")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)  # type: ignore[attr-defined]
+        return mod
+    # Otherwise treat as module name
+    return importlib.import_module(path_or_name)
 
 
 @dataclass
@@ -692,25 +737,62 @@ def try_make_plots(rows: List[InstanceResult], outdir: str) -> List[str]:
     os.makedirs(outdir, exist_ok=True)
     paths: List[str] = []
 
-    # Time distributions by N (boxplot)
+    # Time distributions by N (combined SAT + UNSAT)
     by_n: Dict[int, List[float]] = {}
+    by_n_sat: Dict[int, List[float]] = {}
+    by_n_unsat: Dict[int, List[float]] = {}
     for r in rows:
-        if r.status in ("SAT", "UNSAT"):
+        if r.status == "SAT":
             by_n.setdefault(r.size, []).append(r.wall_time_s)
+            by_n_sat.setdefault(r.size, []).append(r.wall_time_s)
+        elif r.status == "UNSAT":
+            by_n.setdefault(r.size, []).append(r.wall_time_s)
+            by_n_unsat.setdefault(r.size, []).append(r.wall_time_s)
+
+    # Combined plot (SAT + UNSAT successful runs)
     if by_n:
-        labels = sorted(by_n.keys())
-        data = [by_n[n] for n in labels]
+        labels_all = sorted(by_n.keys())
+        data_all = [by_n[n] for n in labels_all]
         plt.figure(figsize=(6, 4))
-        # Matplotlib 3.9+ deprecates 'labels' in favor of 'tick_labels'
-        plt.boxplot(data, tick_labels=[str(l) for l in labels], showfliers=False)
-        plt.title("Solve time by size (successful runs)")
+        plt.boxplot(data_all, tick_labels=[str(l) for l in labels_all], showfliers=False)
+        plt.title("Solve time by size (SAT + UNSAT)")
         plt.xlabel("N")
         plt.ylabel("Seconds")
-        p = os.path.join(outdir, "time_by_size.png")
+        p_all = os.path.join(outdir, "time_by_size.png")
         plt.tight_layout()
-        plt.savefig(p)
+        plt.savefig(p_all)
         plt.close()
-        paths.append(p)
+        paths.append(p_all)
+
+    # SAT-only plot
+    if by_n_sat:
+        labels_sat = sorted(by_n_sat.keys())
+        data_sat = [by_n_sat[n] for n in labels_sat]
+        plt.figure(figsize=(6, 4))
+        plt.boxplot(data_sat, tick_labels=[str(l) for l in labels_sat], showfliers=False)
+        plt.title("Solve time by size (SAT only)")
+        plt.xlabel("N")
+        plt.ylabel("Seconds")
+        p_sat = os.path.join(outdir, "time_by_size_sat.png")
+        plt.tight_layout()
+        plt.savefig(p_sat)
+        plt.close()
+        paths.append(p_sat)
+
+    # UNSAT-only plot
+    if by_n_unsat:
+        labels_unsat = sorted(by_n_unsat.keys())
+        data_unsat = [by_n_unsat[n] for n in labels_unsat]
+        plt.figure(figsize=(6, 4))
+        plt.boxplot(data_unsat, tick_labels=[str(l) for l in labels_unsat], showfliers=False)
+        plt.title("Solve time by size (UNSAT only)")
+        plt.xlabel("N")
+        plt.ylabel("Seconds")
+        p_unsat = os.path.join(outdir, "time_by_size_unsat.png")
+        plt.tight_layout()
+        plt.savefig(p_unsat)
+        plt.close()
+        paths.append(p_unsat)
 
     # Status counts by N (bar chart)
     statuses = ["SAT", "UNSAT", "TIMEOUT", "ERROR"]
@@ -754,6 +836,48 @@ def try_make_plots(rows: List[InstanceResult], outdir: str) -> List[str]:
         plt.close()
         paths.append(p)
 
+    # SAT vs UNSAT side-by-side per size (only if both present for at least one size)
+    # Build dicts for easy lookup
+    sat_times: Dict[int, List[float]] = {}
+    unsat_times: Dict[int, List[float]] = {}
+    for r in rows:
+        if r.status == "SAT":
+            sat_times.setdefault(r.size, []).append(r.wall_time_s)
+        elif r.status == "UNSAT":
+            unsat_times.setdefault(r.size, []).append(r.wall_time_s)
+    common_sizes = [n for n in sorted(set(sat_times.keys()) & set(unsat_times.keys())) if sat_times[n] and unsat_times[n]]
+    if common_sizes:
+        # Side-by-side boxplots using manual positions
+        # Positions: for each size index i, SAT at i-0.15, UNSAT at i+0.15
+        sat_data = [sat_times[n] for n in common_sizes]
+        unsat_data = [unsat_times[n] for n in common_sizes]
+        plt.figure(figsize=(7, 4))
+        base_positions = list(range(len(common_sizes)))
+        sat_positions = [p - 0.15 for p in base_positions]
+        unsat_positions = [p + 0.15 for p in base_positions]
+        # Draw boxplots separately so we can label
+        bp_sat = plt.boxplot(sat_data, positions=sat_positions, widths=0.25, patch_artist=True, showfliers=False)
+        bp_unsat = plt.boxplot(unsat_data, positions=unsat_positions, widths=0.25, patch_artist=True, showfliers=False)
+        # Color styling
+        for patch in bp_sat['boxes']:
+            patch.set_facecolor('#4daf4a')  # green
+        for patch in bp_unsat['boxes']:
+            patch.set_facecolor('#e41a1c')  # red
+        plt.xticks(base_positions, [str(n) for n in common_sizes])
+        plt.xlabel("N")
+        plt.ylabel("Seconds")
+        plt.title("Solve time by size: SAT vs UNSAT")
+        # Legend proxy artists
+        import matplotlib.patches as mpatches  # type: ignore
+        sat_patch = mpatches.Patch(color='#4daf4a', label='SAT')
+        unsat_patch = mpatches.Patch(color='#e41a1c', label='UNSAT')
+        plt.legend(handles=[sat_patch, unsat_patch])
+        p_cmp = os.path.join(outdir, "time_by_size_sat_unsat.png")
+        plt.tight_layout()
+        plt.savefig(p_cmp)
+        plt.close()
+        paths.append(p_cmp)
+
     return paths
 
 
@@ -766,9 +890,11 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--timeout", type=float, default=5.0, help="Per-instance timeout in seconds (Linux only)")
     ap.add_argument("--outdir", type=str, default=os.path.join(os.path.dirname(__file__), "outputs"), help="Output dir for CSV and plots")
     ap.add_argument("--no-plots", action="store_true", help="Skip plotting even if matplotlib is available")
-    ap.add_argument("--suite-mode", choices=["random", "sat"], default="random", help="random: independently random clues; sat: clues masked from a solved grid to ensure SAT")
+    ap.add_argument("--suite-mode", choices=["random", "sat", "folder"], default="random", help="random: independently random clues; sat: clues masked from a solved grid to ensure SAT; folder: evaluate pre-made puzzles from a directory")
     ap.add_argument("--gen-timeout", type=float, default=20.0, help="(Legacy) Timeout for generating a solved grid when suite-mode=sat; generator used instead of solver")
     ap.add_argument("--unsat-proportion", type=float, default=0.0, help="Proportion (0..1) of instances that should be guaranteed-UNSAT (only relevant for suite-mode=sat)")
+    ap.add_argument("--solver", type=str, default="solver", help="Solver module name or path to .py file (e.g. a2/solver_MOM.py or solver_MOM)")
+    ap.add_argument("--puzzle-dir", type=str, default=None, help="Directory containing .txt puzzle files for suite-mode=folder")
     return ap.parse_args()
 
 
@@ -776,62 +902,101 @@ def main() -> None:
     args = parse_args()
     rng = random.Random(args.seed)
 
+    # Attempt dynamic solver loading per --solver argument
+    global solver_mod  # noqa: PLW0603
+    if args.solver:
+        try:
+            solver_mod = load_solver(args.solver)  # type: ignore[assignment]
+            print(f"[info] Loaded solver module: {args.solver} -> {solver_mod.__name__}")
+        except Exception as e:
+            print(f"[error] Failed to load solver '{args.solver}': {e}")
+            print("[error] Falling back to default imported 'solver' module.")
+
     results: List[InstanceResult] = []
     tmp_dir = os.path.join(args.outdir, "tmp")
     os.makedirs(tmp_dir, exist_ok=True)
 
-    for n in args.sizes:
-        # quick validation
-        b = int(math.isqrt(n))
-        if b * b != n:
-            print(f"[skip] N={n} is not a perfect square; skipping.")
-            continue
-
-        base_solution: Optional[List[List[int]]] = None
-        if args.suite_mode == "sat":
-            # Use local generator to obtain a solved grid (fast & robust)
-            try:
-                start_g = time.perf_counter()
-                base_solution = generate_solved_grid(n, rng, non_consecutive=True, max_tries=int(max(10000, args.gen_timeout * 1000)))
-                if base_solution is None:
-                    print(f"N={n}: failed to produce solved grid with generator; falling back to random suite.")
-                else:
-                    print(f"N={n}: generated base solved grid locally in {time.perf_counter() - start_g:.3f}s for SAT suite.")
-            except Exception as e:
-                print(f"N={n}: error generating base solution: {e}; falling back to random suite.")
-
-        # For suite-mode=sat, preselect exact UNSAT indices per size so the final
-        # labeled distribution matches --unsat-proportion exactly (rounding applied).
-        unsat_indices: Set[int] = set()
-        if base_solution is not None:
-            m = args.instances_per_size
-            target_unsat = int(round(args.unsat_proportion * m))
-            target_unsat = max(0, min(m, target_unsat))
-            if target_unsat > 0:
-                unsat_indices = set(rng.sample(range(m), target_unsat))
-
-        for i in range(args.instances_per_size):
-            if base_solution is not None:
-                # Decide whether this instance should be guaranteed UNSAT
-                # Exact selection (not Bernoulli): i in unsat_indices means UNSAT
-                make_unsat = (i in unsat_indices)
-                if make_unsat:
-                    # Create a visible contradiction and force those clues to remain
-                    conflict_solution, forced = make_unsat_with_forced_conflict(base_solution, rng=rng)
-                    grid = mask_grid_with_forced(conflict_solution, args.clue_density, forced, rng=rng)
-                    expected = "UNSAT"
-                else:
-                    grid = mask_grid(base_solution, args.clue_density, rng=rng)
-                    # Masked from a valid solved grid -> definitely SAT
-                    expected = "SAT"
-            else:
-                grid = generate_random_puzzle(n, args.clue_density, rng)
-                # For random puzzles we can still detect hard conflicts in clues (optional)
+    # Folder mode: enumerate puzzle files and evaluate directly
+    if args.suite_mode == "folder":
+        puzzle_dir = args.puzzle_dir or os.path.join(os.path.dirname(__file__), "..", "puzzles")
+        puzzle_dir = os.path.abspath(puzzle_dir)
+        if not os.path.isdir(puzzle_dir):
+            print(f"[error] puzzle directory not found: {puzzle_dir}")
+        else:
+            puzzle_files = [f for f in sorted(os.listdir(puzzle_dir)) if f.endswith('.txt')]
+            if not puzzle_files:
+                print(f"[warn] no .txt puzzles found in {puzzle_dir}")
+            for idx, fname in enumerate(puzzle_files, 1):
+                path = os.path.join(puzzle_dir, fname)
+                try:
+                    with open(path, 'r') as pf:
+                        rows_raw = [line.strip() for line in pf if line.strip()]
+                    grid: List[List[int]] = []
+                    for line in rows_raw:
+                        parts = line.split()
+                        grid.append([int(p) for p in parts])
+                    # basic validation: square and size is perfect square
+                    n = len(grid)
+                    if any(len(r) != n for r in grid):
+                        raise ValueError("grid not square")
+                    b = int(math.isqrt(n))
+                    if b * b != n:
+                        raise ValueError("N not perfect square")
+                except Exception as e:
+                    print(f"[skip] {fname}: parse error {e}")
+                    continue
                 expected = "UNSAT" if clues_have_semantic_conflict(grid) else None
+                res = run_one_instance(grid, args.timeout, tmp_dir, expected_status=expected)
+                results.append(res)
+                print(f"{fname} -> N={n}, status={res.status} time={res.wall_time_s:.3f}s clauses={res.n_clauses}")
+    else:
+        # Existing generation-based modes (random / sat)
+        for n in args.sizes:
+            # quick validation
+            b = int(math.isqrt(n))
+            if b * b != n:
+                print(f"[skip] N={n} is not a perfect square; skipping.")
+                continue
 
-            res = run_one_instance(grid, args.timeout, tmp_dir, expected_status=expected)
-            results.append(res)
-            print(f"N={n} [{i+1}/{args.instances_per_size}] -> {res.status} in {res.wall_time_s:.3f}s, clauses={res.n_clauses}")
+            base_solution: Optional[List[List[int]]] = None
+            if args.suite_mode == "sat":
+                # Use local generator to obtain a solved grid (fast & robust)
+                try:
+                    start_g = time.perf_counter()
+                    base_solution = generate_solved_grid(n, rng, non_consecutive=True, max_tries=int(max(10000, args.gen_timeout * 1000)))
+                    if base_solution is None:
+                        print(f"N={n}: failed to produce solved grid with generator; falling back to random suite.")
+                    else:
+                        print(f"N={n}: generated base solved grid locally in {time.perf_counter() - start_g:.3f}s for SAT suite.")
+                except Exception as e:
+                    print(f"N={n}: error generating base solution: {e}; falling back to random suite.")
+
+            # Preselect UNSAT indices for sat mode
+            unsat_indices: Set[int] = set()
+            if base_solution is not None:
+                m = args.instances_per_size
+                target_unsat = int(round(args.unsat_proportion * m))
+                target_unsat = max(0, min(m, target_unsat))
+                if target_unsat > 0:
+                    unsat_indices = set(rng.sample(range(m), target_unsat))
+
+            for i in range(args.instances_per_size):
+                if base_solution is not None:
+                    make_unsat = (i in unsat_indices)
+                    if make_unsat:
+                        conflict_solution, forced = make_unsat_with_forced_conflict(base_solution, rng=rng)
+                        grid = mask_grid_with_forced(conflict_solution, args.clue_density, forced, rng=rng)
+                        expected = "UNSAT"
+                    else:
+                        grid = mask_grid(base_solution, args.clue_density, rng=rng)
+                        expected = "SAT"
+                else:
+                    grid = generate_random_puzzle(n, args.clue_density, rng)
+                    expected = "UNSAT" if clues_have_semantic_conflict(grid) else None
+
+                res = run_one_instance(grid, args.timeout, tmp_dir, expected_status=expected)
+                results.append(res)
+                print(f"N={n} [{i+1}/{args.instances_per_size}] -> {res.status} in {res.wall_time_s:.3f}s, clauses={res.n_clauses}")
 
     # Save CSV
     csv_path = os.path.join(args.outdir, "metrics.csv")
