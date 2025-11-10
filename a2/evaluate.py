@@ -17,9 +17,15 @@ Compared with the original script, this version:
      predicted and expected status
 
 Outputs:
-  - CSV with one row per instance (outdir/metrics.csv)
-  - Plots (PNG): time_by_size.png, status_counts.png, time_vs_dp_calls.png
-  - Temporary puzzles stored in outdir/tmp
+    - CSV with one row per instance (outdir/metrics.csv)
+    - Plots (PNG):
+            * time_by_size.png (combined SAT+UNSAT successful runs)
+            * time_by_size_sat.png (SAT only)
+            * time_by_size_unsat.png (UNSAT only)
+            * time_by_size_sat_unsat.png (SAT vs UNSAT side-by-side per size)
+            * status_counts.png
+            * time_vs_dp_calls.png
+    - Temporary puzzles stored in outdir/tmp
 
 Usage examples:
   python3 a2/evaluate.py --sizes 4 9 --instances-per-size 20 --clue-density 0.5 \
@@ -729,25 +735,62 @@ def try_make_plots(rows: List[InstanceResult], outdir: str) -> List[str]:
     os.makedirs(outdir, exist_ok=True)
     paths: List[str] = []
 
-    # Time distributions by N (boxplot)
+    # Time distributions by N (combined SAT + UNSAT)
     by_n: Dict[int, List[float]] = {}
+    by_n_sat: Dict[int, List[float]] = {}
+    by_n_unsat: Dict[int, List[float]] = {}
     for r in rows:
-        if r.status in ("SAT", "UNSAT"):
+        if r.status == "SAT":
             by_n.setdefault(r.size, []).append(r.wall_time_s)
+            by_n_sat.setdefault(r.size, []).append(r.wall_time_s)
+        elif r.status == "UNSAT":
+            by_n.setdefault(r.size, []).append(r.wall_time_s)
+            by_n_unsat.setdefault(r.size, []).append(r.wall_time_s)
+
+    # Combined plot (SAT + UNSAT successful runs)
     if by_n:
-        labels = sorted(by_n.keys())
-        data = [by_n[n] for n in labels]
+        labels_all = sorted(by_n.keys())
+        data_all = [by_n[n] for n in labels_all]
         plt.figure(figsize=(6, 4))
-        # Matplotlib 3.9+ deprecates 'labels' in favor of 'tick_labels'
-        plt.boxplot(data, tick_labels=[str(l) for l in labels], showfliers=False)
-        plt.title("Solve time by size (successful runs)")
+        plt.boxplot(data_all, tick_labels=[str(l) for l in labels_all], showfliers=False)
+        plt.title("Solve time by size (SAT + UNSAT)")
         plt.xlabel("N")
         plt.ylabel("Seconds")
-        p = os.path.join(outdir, "time_by_size.png")
+        p_all = os.path.join(outdir, "time_by_size.png")
         plt.tight_layout()
-        plt.savefig(p)
+        plt.savefig(p_all)
         plt.close()
-        paths.append(p)
+        paths.append(p_all)
+
+    # SAT-only plot
+    if by_n_sat:
+        labels_sat = sorted(by_n_sat.keys())
+        data_sat = [by_n_sat[n] for n in labels_sat]
+        plt.figure(figsize=(6, 4))
+        plt.boxplot(data_sat, tick_labels=[str(l) for l in labels_sat], showfliers=False)
+        plt.title("Solve time by size (SAT only)")
+        plt.xlabel("N")
+        plt.ylabel("Seconds")
+        p_sat = os.path.join(outdir, "time_by_size_sat.png")
+        plt.tight_layout()
+        plt.savefig(p_sat)
+        plt.close()
+        paths.append(p_sat)
+
+    # UNSAT-only plot
+    if by_n_unsat:
+        labels_unsat = sorted(by_n_unsat.keys())
+        data_unsat = [by_n_unsat[n] for n in labels_unsat]
+        plt.figure(figsize=(6, 4))
+        plt.boxplot(data_unsat, tick_labels=[str(l) for l in labels_unsat], showfliers=False)
+        plt.title("Solve time by size (UNSAT only)")
+        plt.xlabel("N")
+        plt.ylabel("Seconds")
+        p_unsat = os.path.join(outdir, "time_by_size_unsat.png")
+        plt.tight_layout()
+        plt.savefig(p_unsat)
+        plt.close()
+        paths.append(p_unsat)
 
     # Status counts by N (bar chart)
     statuses = ["SAT", "UNSAT", "TIMEOUT", "ERROR"]
@@ -790,6 +833,48 @@ def try_make_plots(rows: List[InstanceResult], outdir: str) -> List[str]:
         plt.savefig(p)
         plt.close()
         paths.append(p)
+
+    # SAT vs UNSAT side-by-side per size (only if both present for at least one size)
+    # Build dicts for easy lookup
+    sat_times: Dict[int, List[float]] = {}
+    unsat_times: Dict[int, List[float]] = {}
+    for r in rows:
+        if r.status == "SAT":
+            sat_times.setdefault(r.size, []).append(r.wall_time_s)
+        elif r.status == "UNSAT":
+            unsat_times.setdefault(r.size, []).append(r.wall_time_s)
+    common_sizes = [n for n in sorted(set(sat_times.keys()) & set(unsat_times.keys())) if sat_times[n] and unsat_times[n]]
+    if common_sizes:
+        # Side-by-side boxplots using manual positions
+        # Positions: for each size index i, SAT at i-0.15, UNSAT at i+0.15
+        sat_data = [sat_times[n] for n in common_sizes]
+        unsat_data = [unsat_times[n] for n in common_sizes]
+        plt.figure(figsize=(7, 4))
+        base_positions = list(range(len(common_sizes)))
+        sat_positions = [p - 0.15 for p in base_positions]
+        unsat_positions = [p + 0.15 for p in base_positions]
+        # Draw boxplots separately so we can label
+        bp_sat = plt.boxplot(sat_data, positions=sat_positions, widths=0.25, patch_artist=True, showfliers=False)
+        bp_unsat = plt.boxplot(unsat_data, positions=unsat_positions, widths=0.25, patch_artist=True, showfliers=False)
+        # Color styling
+        for patch in bp_sat['boxes']:
+            patch.set_facecolor('#4daf4a')  # green
+        for patch in bp_unsat['boxes']:
+            patch.set_facecolor('#e41a1c')  # red
+        plt.xticks(base_positions, [str(n) for n in common_sizes])
+        plt.xlabel("N")
+        plt.ylabel("Seconds")
+        plt.title("Solve time by size: SAT vs UNSAT")
+        # Legend proxy artists
+        import matplotlib.patches as mpatches  # type: ignore
+        sat_patch = mpatches.Patch(color='#4daf4a', label='SAT')
+        unsat_patch = mpatches.Patch(color='#e41a1c', label='UNSAT')
+        plt.legend(handles=[sat_patch, unsat_patch])
+        p_cmp = os.path.join(outdir, "time_by_size_sat_unsat.png")
+        plt.tight_layout()
+        plt.savefig(p_cmp)
+        plt.close()
+        paths.append(p_cmp)
 
     return paths
 
