@@ -7,9 +7,8 @@ Implement: solve_cnf(clauses) -> (status, model_or_None)
 
 Notes:
 - This file contains a DPLL-style solver with:
-  - unit propagation (to a fixpoint),
-  - pure literal elimination (to a fixpoint), and
-  - an improved branching heuristic (Jeroslow–Wang).
+  - unit propagation (to a fixpoint), and
+  - pure literal elimination (to a fixpoint)
   The core search (dp) is implemented iteratively (non-recursive) to avoid
   recursion limits while preserving the same public API so the evaluator can
   instrument it.
@@ -85,32 +84,9 @@ def remove_literal(clauses: Iterable[Iterable[int]], literal: int) -> List[List[
 # SOURCE: https://en.wikipedia.org/wiki/Boolean_satisfiability_algorithm_heuristics?utm_source=chatgpt.com
 # Use of Early branching Heuristics
 def select_literal(clauses: Iterable[Iterable[int]]) -> int:
-  """We pick a branching literal using Jeroslow–Wang (JW) scores.
-
-  JW score(l) = sum over clauses c containing l of 2^(-|c|).
-  We choose the literal with the maximum JW score. If scores tie, fall back
-  to the first encountered literal. This method often chooses shorter clauses and
-  should reduce search depth.
+  """Randomly select a literal
   """
-  # Compute JW scores for both polarities independently
-  scores: dict[int, float] = {}
-  any_literal = 0
-  for c in clauses:
-    k = len(c)
-    if k == 0:
-      continue
-    weight = 2.0 ** (-k)
-    for lit in c:
-      any_literal = any_literal or lit
-      scores[lit] = scores.get(lit, 0.0) + weight
-  if not scores:
-    # Degenerate case: no literals — shouldn't happen due to terminal checks,
-    # but keep just in case.
-    return any_literal if any_literal != 0 else 1
-
-  # Finally, choose literal with the best score
-  best_lit = max(scores.items(), key=lambda kv: kv[1])[0]
-  return best_lit
+  return choice(list(set([literal for clause in clauses for literal in clause])))
 
 
 def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> Tuple[str, List[int] | None]:
