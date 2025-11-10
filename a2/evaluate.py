@@ -32,6 +32,7 @@ Usage examples:
       --suite-mode sat --unsat-proportion 0.2 --gen-timeout 10 --timeout 5 --outdir a2/outputs
     python3 a2/evaluate.py --solver a2/solver_MOM.py --sizes 9 --instances-per-size 5 --clue-density 0.3
     python3 a2/evaluate.py --solver solver_JW --sizes 4 9 --suite-mode sat --unsat-proportion 0.1
+        python3 a2/evaluate.py --suite-mode folder --puzzle-dir puzzles --solver a2/solver_JW.py --outdir a2/outputs
 
 Note:
  - This script assumes `encoder.py` and your `solver` module (imported as solver_mod)
@@ -39,6 +40,7 @@ Note:
  - Generation does not use your solver (avoids gen-timeout failures).
  - You can select an alternative solver implementation via --solver providing either
         a module name (e.g. solver_MOM or a2.solver_MOM) or a path to a .py file (e.g. a2/solver_MOM.py).
+ - Suite mode 'folder' evaluates all .txt puzzles in --puzzle-dir (each row space-separated integers; 0 for empty). --sizes and --instances-per-size are ignored in this mode.
 """
 from __future__ import annotations
 
@@ -888,10 +890,11 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--timeout", type=float, default=5.0, help="Per-instance timeout in seconds (Linux only)")
     ap.add_argument("--outdir", type=str, default=os.path.join(os.path.dirname(__file__), "outputs"), help="Output dir for CSV and plots")
     ap.add_argument("--no-plots", action="store_true", help="Skip plotting even if matplotlib is available")
-    ap.add_argument("--suite-mode", choices=["random", "sat"], default="random", help="random: independently random clues; sat: clues masked from a solved grid to ensure SAT")
+    ap.add_argument("--suite-mode", choices=["random", "sat", "folder"], default="random", help="random: independently random clues; sat: clues masked from a solved grid to ensure SAT; folder: evaluate pre-made puzzles from a directory")
     ap.add_argument("--gen-timeout", type=float, default=20.0, help="(Legacy) Timeout for generating a solved grid when suite-mode=sat; generator used instead of solver")
     ap.add_argument("--unsat-proportion", type=float, default=0.0, help="Proportion (0..1) of instances that should be guaranteed-UNSAT (only relevant for suite-mode=sat)")
     ap.add_argument("--solver", type=str, default="solver", help="Solver module name or path to .py file (e.g. a2/solver_MOM.py or solver_MOM)")
+    ap.add_argument("--puzzle-dir", type=str, default=None, help="Directory containing .txt puzzle files for suite-mode=folder")
     return ap.parse_args()
 
 
@@ -913,58 +916,87 @@ def main() -> None:
     tmp_dir = os.path.join(args.outdir, "tmp")
     os.makedirs(tmp_dir, exist_ok=True)
 
-    for n in args.sizes:
-        # quick validation
-        b = int(math.isqrt(n))
-        if b * b != n:
-            print(f"[skip] N={n} is not a perfect square; skipping.")
-            continue
-
-        base_solution: Optional[List[List[int]]] = None
-        if args.suite_mode == "sat":
-            # Use local generator to obtain a solved grid (fast & robust)
-            try:
-                start_g = time.perf_counter()
-                base_solution = generate_solved_grid(n, rng, non_consecutive=True, max_tries=int(max(10000, args.gen_timeout * 1000)))
-                if base_solution is None:
-                    print(f"N={n}: failed to produce solved grid with generator; falling back to random suite.")
-                else:
-                    print(f"N={n}: generated base solved grid locally in {time.perf_counter() - start_g:.3f}s for SAT suite.")
-            except Exception as e:
-                print(f"N={n}: error generating base solution: {e}; falling back to random suite.")
-
-        # For suite-mode=sat, preselect exact UNSAT indices per size so the final
-        # labeled distribution matches --unsat-proportion exactly (rounding applied).
-        unsat_indices: Set[int] = set()
-        if base_solution is not None:
-            m = args.instances_per_size
-            target_unsat = int(round(args.unsat_proportion * m))
-            target_unsat = max(0, min(m, target_unsat))
-            if target_unsat > 0:
-                unsat_indices = set(rng.sample(range(m), target_unsat))
-
-        for i in range(args.instances_per_size):
-            if base_solution is not None:
-                # Decide whether this instance should be guaranteed UNSAT
-                # Exact selection (not Bernoulli): i in unsat_indices means UNSAT
-                make_unsat = (i in unsat_indices)
-                if make_unsat:
-                    # Create a visible contradiction and force those clues to remain
-                    conflict_solution, forced = make_unsat_with_forced_conflict(base_solution, rng=rng)
-                    grid = mask_grid_with_forced(conflict_solution, args.clue_density, forced, rng=rng)
-                    expected = "UNSAT"
-                else:
-                    grid = mask_grid(base_solution, args.clue_density, rng=rng)
-                    # Masked from a valid solved grid -> definitely SAT
-                    expected = "SAT"
-            else:
-                grid = generate_random_puzzle(n, args.clue_density, rng)
-                # For random puzzles we can still detect hard conflicts in clues (optional)
+    # Folder mode: enumerate puzzle files and evaluate directly
+    if args.suite_mode == "folder":
+        puzzle_dir = args.puzzle_dir or os.path.join(os.path.dirname(__file__), "..", "puzzles")
+        puzzle_dir = os.path.abspath(puzzle_dir)
+        if not os.path.isdir(puzzle_dir):
+            print(f"[error] puzzle directory not found: {puzzle_dir}")
+        else:
+            puzzle_files = [f for f in sorted(os.listdir(puzzle_dir)) if f.endswith('.txt')]
+            if not puzzle_files:
+                print(f"[warn] no .txt puzzles found in {puzzle_dir}")
+            for idx, fname in enumerate(puzzle_files, 1):
+                path = os.path.join(puzzle_dir, fname)
+                try:
+                    with open(path, 'r') as pf:
+                        rows_raw = [line.strip() for line in pf if line.strip()]
+                    grid: List[List[int]] = []
+                    for line in rows_raw:
+                        parts = line.split()
+                        grid.append([int(p) for p in parts])
+                    # basic validation: square and size is perfect square
+                    n = len(grid)
+                    if any(len(r) != n for r in grid):
+                        raise ValueError("grid not square")
+                    b = int(math.isqrt(n))
+                    if b * b != n:
+                        raise ValueError("N not perfect square")
+                except Exception as e:
+                    print(f"[skip] {fname}: parse error {e}")
+                    continue
                 expected = "UNSAT" if clues_have_semantic_conflict(grid) else None
+                res = run_one_instance(grid, args.timeout, tmp_dir, expected_status=expected)
+                results.append(res)
+                print(f"{fname} -> N={n}, status={res.status} time={res.wall_time_s:.3f}s clauses={res.n_clauses}")
+    else:
+        # Existing generation-based modes (random / sat)
+        for n in args.sizes:
+            # quick validation
+            b = int(math.isqrt(n))
+            if b * b != n:
+                print(f"[skip] N={n} is not a perfect square; skipping.")
+                continue
 
-            res = run_one_instance(grid, args.timeout, tmp_dir, expected_status=expected)
-            results.append(res)
-            print(f"N={n} [{i+1}/{args.instances_per_size}] -> {res.status} in {res.wall_time_s:.3f}s, clauses={res.n_clauses}")
+            base_solution: Optional[List[List[int]]] = None
+            if args.suite_mode == "sat":
+                # Use local generator to obtain a solved grid (fast & robust)
+                try:
+                    start_g = time.perf_counter()
+                    base_solution = generate_solved_grid(n, rng, non_consecutive=True, max_tries=int(max(10000, args.gen_timeout * 1000)))
+                    if base_solution is None:
+                        print(f"N={n}: failed to produce solved grid with generator; falling back to random suite.")
+                    else:
+                        print(f"N={n}: generated base solved grid locally in {time.perf_counter() - start_g:.3f}s for SAT suite.")
+                except Exception as e:
+                    print(f"N={n}: error generating base solution: {e}; falling back to random suite.")
+
+            # Preselect UNSAT indices for sat mode
+            unsat_indices: Set[int] = set()
+            if base_solution is not None:
+                m = args.instances_per_size
+                target_unsat = int(round(args.unsat_proportion * m))
+                target_unsat = max(0, min(m, target_unsat))
+                if target_unsat > 0:
+                    unsat_indices = set(rng.sample(range(m), target_unsat))
+
+            for i in range(args.instances_per_size):
+                if base_solution is not None:
+                    make_unsat = (i in unsat_indices)
+                    if make_unsat:
+                        conflict_solution, forced = make_unsat_with_forced_conflict(base_solution, rng=rng)
+                        grid = mask_grid_with_forced(conflict_solution, args.clue_density, forced, rng=rng)
+                        expected = "UNSAT"
+                    else:
+                        grid = mask_grid(base_solution, args.clue_density, rng=rng)
+                        expected = "SAT"
+                else:
+                    grid = generate_random_puzzle(n, args.clue_density, rng)
+                    expected = "UNSAT" if clues_have_semantic_conflict(grid) else None
+
+                res = run_one_instance(grid, args.timeout, tmp_dir, expected_status=expected)
+                results.append(res)
+                print(f"N={n} [{i+1}/{args.instances_per_size}] -> {res.status} in {res.wall_time_s:.3f}s, clauses={res.n_clauses}")
 
     # Save CSV
     csv_path = os.path.join(args.outdir, "metrics.csv")
