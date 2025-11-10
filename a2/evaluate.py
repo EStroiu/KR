@@ -24,11 +24,15 @@ Outputs:
 Usage examples:
   python3 a2/evaluate.py --sizes 4 9 --instances-per-size 20 --clue-density 0.5 \
       --suite-mode sat --unsat-proportion 0.2 --gen-timeout 10 --timeout 5 --outdir a2/outputs
+    python3 a2/evaluate.py --solver a2/solver_MOM.py --sizes 9 --instances-per-size 5 --clue-density 0.3
+    python3 a2/evaluate.py --solver solver_JW --sizes 4 9 --suite-mode sat --unsat-proportion 0.1
 
 Note:
  - This script assumes `encoder.py` and your `solver` module (imported as solver_mod)
    are present and compatible with the rest of the code.
  - Generation does not use your solver (avoids gen-timeout failures).
+ - You can select an alternative solver implementation via --solver providing either
+        a module name (e.g. solver_MOM or a2.solver_MOM) or a path to a .py file (e.g. a2/solver_MOM.py).
 """
 from __future__ import annotations
 
@@ -46,7 +50,40 @@ from typing import Callable, Dict, Iterable, List, Optional, Tuple, Set
 
 # Local modules (must exist in the same package)
 import encoder
-import solver as solver_mod
+# Default solver import; can be overridden by --solver option.
+import solver as solver_mod  # type: ignore
+
+# Dynamic solver loading helper
+import importlib.util
+import importlib
+from types import ModuleType
+
+def load_solver(path_or_name: str) -> ModuleType:
+    """Load a solver module given either a filesystem path to a .py file or a module name.
+
+    Accepts examples like:
+      --solver solver               (regular import by name in PYTHONPATH)
+      --solver a2.solver_MOM        (qualified module name)
+      --solver a2/solver_MOM.py     (filesystem relative path)
+      --solver ./a2/solver_JW.py    (relative path)
+
+    Returns the loaded module object. Raises ImportError / FileNotFoundError on failure.
+    The loaded module must provide solve_cnf(...) plus any optional functions used for instrumentation.
+    """
+    # If it looks like a path (endswith .py or contains a path separator), treat as file path
+    if path_or_name.endswith('.py') or os.sep in path_or_name:
+        path = os.path.abspath(path_or_name)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"Solver file not found: {path}")
+        module_name = os.path.splitext(os.path.basename(path))[0]
+        spec = importlib.util.spec_from_file_location(module_name, path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Could not create import spec for solver at {path}")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)  # type: ignore[attr-defined]
+        return mod
+    # Otherwise treat as module name
+    return importlib.import_module(path_or_name)
 
 
 @dataclass
@@ -769,12 +806,23 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--suite-mode", choices=["random", "sat"], default="random", help="random: independently random clues; sat: clues masked from a solved grid to ensure SAT")
     ap.add_argument("--gen-timeout", type=float, default=20.0, help="(Legacy) Timeout for generating a solved grid when suite-mode=sat; generator used instead of solver")
     ap.add_argument("--unsat-proportion", type=float, default=0.0, help="Proportion (0..1) of instances that should be guaranteed-UNSAT (only relevant for suite-mode=sat)")
+    ap.add_argument("--solver", type=str, default="solver", help="Solver module name or path to .py file (e.g. a2/solver_MOM.py or solver_MOM)")
     return ap.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     rng = random.Random(args.seed)
+
+    # Attempt dynamic solver loading per --solver argument
+    global solver_mod  # noqa: PLW0603
+    if args.solver:
+        try:
+            solver_mod = load_solver(args.solver)  # type: ignore[assignment]
+            print(f"[info] Loaded solver module: {args.solver} -> {solver_mod.__name__}")
+        except Exception as e:
+            print(f"[error] Failed to load solver '{args.solver}': {e}")
+            print("[error] Falling back to default imported 'solver' module.")
 
     results: List[InstanceResult] = []
     tmp_dir = os.path.join(args.outdir, "tmp")
