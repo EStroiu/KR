@@ -7,8 +7,9 @@ Implement: solve_cnf(clauses) -> (status, model_or_None)
 
 Notes:
 - This file contains a DPLL-style solver with:
-  - unit propagation (to a fixpoint), and
-  - pure literal elimination (to a fixpoint)
+  - unit propagation (to a fixpoint),
+  - pure literal elimination (to a fixpoint), and
+  - an improved branching heuristic (Jeroslow–Wang).
   The core search (dp) is implemented iteratively (non-recursive) to avoid
   recursion limits while preserving the same public API so the evaluator can
   instrument it.
@@ -81,12 +82,36 @@ def remove_literal(clauses: Iterable[Iterable[int]], literal: int) -> List[List[
   return new_clauses
 
 
-# SOURCE: https://en.wikipedia.org/wiki/Boolean_satisfiability_algorithm_heuristics?utm_source=chatgpt.com
+# SOURCE: lecture slide
 # Use of Early branching Heuristics
 def select_literal(clauses: Iterable[Iterable[int]]) -> int:
-  """Randomly select a literal
+  """We pick a branching literal using MOM's heuristic.
+
+  MOM's score(l) = [f*(l)+f*(l')]2^k+f*(l)f*(l').
+  f*(l) is the number of times l occurss in the smallest no satisfied clauses, and
+  k is a tuning aprameter
   """
-  return choice(list(set([literal for clause in clauses for literal in clause])))
+  k=1
+  smallest_size = 0
+  smallest_clauses = []
+  for clause in clauses:
+    clause_size = len(clause)
+    if smallest_size == 0:
+      smallest_size = clause_size
+      smallest_clauses.append(clause)
+    elif len(clause_size) < smallest_size:
+      smallest_size = clause_size
+      smallest_clauses = [clause]
+
+  literals = [literal for clause in smallest_clauses for literal in clause]
+  unique_literals = set([abs(literal) for literal in literals])
+  counts = map(lambda x: (x, literals.count(x), literals.count(-x)), unique_literals)
+  counts = map(lambda x: (x[0], (x[1]+x[2])**(2**k)+(x[1]*x[2]), x[1], x[2]), counts)
+  literal = sorted(counts, key=lambda x: x[1], reverse=True)[0]
+  if literal[2] > literal[3]:
+    return literal[0]
+  else:
+    return -literal[0]
 
 
 def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> Tuple[str, List[int] | None]:

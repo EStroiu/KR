@@ -7,8 +7,9 @@ Implement: solve_cnf(clauses) -> (status, model_or_None)
 
 Notes:
 - This file contains a DPLL-style solver with:
-  - unit propagation (to a fixpoint), and
-  - pure literal elimination (to a fixpoint)
+  - unit propagation (to a fixpoint),
+  - pure literal elimination (to a fixpoint), and
+  - an improved branching heuristic (Jeroslow–Wang).
   The core search (dp) is implemented iteratively (non-recursive) to avoid
   recursion limits while preserving the same public API so the evaluator can
   instrument it.
@@ -81,12 +82,29 @@ def remove_literal(clauses: Iterable[Iterable[int]], literal: int) -> List[List[
   return new_clauses
 
 
-# SOURCE: https://en.wikipedia.org/wiki/Boolean_satisfiability_algorithm_heuristics?utm_source=chatgpt.com
+# SOURCE: www.cs.cmu.edu/~emc/15-820A/reading/sat_cmu.pdf
 # Use of Early branching Heuristics
 def select_literal(clauses: Iterable[Iterable[int]]) -> int:
-  """Randomly select a literal
+  """We pick a branching literal using MOM's heuristic.
+
+  MOM's score(l) = [f*(l)+f*(l')]2^k+f*(l)f*(l').
+  f*(l) is the number of times l occurss in the smallest no satisfied clauses, and
+  k is a tuning aprameter
   """
-  return choice(list(set([literal for clause in clauses for literal in clause])))
+  literals = [literal for clause in clauses for literal in clause]
+  unique_literals = set([abs(literal) for literal in literals])
+
+  largest_count = 0
+  largest_literal = 0
+  counts = list(map(lambda x: (x, literals.count(x), literals.count(-x)), unique_literals))
+  for count in counts:
+    if count[1] > largest_count:
+      largest_count = count[2]
+      largest_literal = count[0]
+    else:
+      largest_literal = -abs(largest_literal)
+
+  return largest_literal
 
 
 def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> Tuple[str, List[int] | None]:
