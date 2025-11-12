@@ -15,10 +15,10 @@ SEED=${SEED:-42}
 
 # Solver list: paths relative to repo root
 SOLVERS=(
-  "a2/solver.py"
-  "a2/solver_JW.py"
-  "a2/solver_MOM.py"
-  "a2/solver_DLIS.py"
+  "solver.py"
+  "solver_JW.py"
+  "solver_MOM.py"
+  "solver_DLIS.py"
 )
 
 # ----------------------------------------
