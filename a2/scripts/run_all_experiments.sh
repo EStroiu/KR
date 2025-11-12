@@ -61,7 +61,7 @@ run_experiment() {
     local timeout="$TIMEOUT_9"
     if printf '%s\n' "${eval_args[@]}" | grep -q -- "--sizes"; then
       # rough parse: if sizes contains 25, use TIMEOUT_25
-      if printf '%s\n' "${eval_args[@]}" | grep -E "--sizes(=| )" | grep -q 25; then
+      if printf '%s\n' "${eval_args[@]}" | grep -E -- "--sizes(=| )" | grep -q 25; then
         timeout="$TIMEOUT_25"
       fi
     fi
