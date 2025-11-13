@@ -1,22 +1,3 @@
-"""
-SAT Assignment Part 2 - Non-consecutive Sudoku Solver (Puzzle -> SAT/UNSAT)
-
-THIS is the file to edit.
-
-Implement: solve_cnf(clauses) -> (status, model_or_None)
-
-Notes:
-- This file contains a DPLL-style solver with:
-  - unit propagation (to a fixpoint),
-  - pure literal elimination (to a fixpoint), and
-  - an improved branching heuristic (Jeroslow–Wang).
-  The core search (dp) is implemented iteratively (non-recursive) to avoid
-  recursion limits while preserving the same public API so the evaluator can
-  instrument it.
-  It prioritizes correctness and clarity so it can be evaluated by the provided script.
-"""
-
-
 from typing import Iterable, List, Tuple, Optional
 from random import choice
 
@@ -70,10 +51,10 @@ def remove_literal(clauses: Iterable[Iterable[int]], literal: int) -> List[List[
   """Assign the given literal to True and simplify clauses accordingly."""
   new_clauses: List[List[int]] = []
   for clause in clauses:
-    # Clause satisfied -> drop
+    # clause satisfied -> drop
     if literal in clause:
       continue
-    # Remove negation -> shrink if present; otherwise reuse clause to avoid copy
+    # remove negation -> shrink if present; otherwise reuse clause to avoid copy
     if -literal in clause:
       new_clauses.append([l for l in clause if l != -literal])
     else:
@@ -102,12 +83,12 @@ def select_literal(clauses: Iterable[Iterable[int]]) -> int:
   min_len_clauses: list[list[int]] = []
 
   for c in clauses:
-    # Ensure list for reuse and length
+    # ensure list for reuse and length
     cl = c if isinstance(c, list) else list(c)
     k = len(cl)
     if k == 0:
       continue
-    # Track smallest non-unit clause(s) to guide branching
+    # track smallest non-unit clause(s) to guide branching
     if k > 1 and (min_len is None or k < min_len):
       min_len = k
       min_len_clauses = [cl]
