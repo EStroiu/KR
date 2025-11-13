@@ -85,33 +85,57 @@ def remove_literal(clauses: Iterable[Iterable[int]], literal: int) -> List[List[
 # SOURCE: lecture slide
 # Use of Early branching Heuristics
 def select_literal(clauses: Iterable[Iterable[int]]) -> int:
-  """We pick a branching literal using MOM's heuristic.
+  """Pick a branching literal using a corrected MOM heuristic.
 
-  MOM's score(l) = [f*(l)+f*(l')]2^k+f*(l)f*(l').
-  f*(l) is the number of times l occurss in the smallest no satisfied clauses, and
-  k is a tuning aprameter
+  MOMs score(l) = (f*(l) + f*(¬l)) * 2^k + f*(l) * f*(¬l),
+  where f*(·) counts occurrences in the smallest non-unit clauses.
+  We use k=2 by default. If no non-unit clauses exist, we fall back to all clauses.
   """
-  k=1
-  smallest_size = 0
-  smallest_clauses = []
-  for clause in clauses:
-    clause_size = len(clause)
-    if smallest_size == 0:
-      smallest_size = clause_size
-      smallest_clauses.append(clause)
-    elif len(clause_size) < smallest_size:
-      smallest_size = clause_size
-      smallest_clauses = [clause]
+  k = 2
+  smallest_len: Optional[int] = None
+  smallest_clauses: List[List[int]] = []
+  any_lit = 0
+  for c in clauses:
+    cl = c if isinstance(c, list) else list(c)
+    any_lit = any_lit or (cl[0] if cl else 0)
+    m = len(cl)
+    if m == 0:
+      continue
+    # consider only non-unit for MOM guidance if present
+    if m > 1 and (smallest_len is None or m < smallest_len):
+      smallest_len = m
+      smallest_clauses = [cl]
+    elif m > 1 and m == smallest_len:
+      smallest_clauses.append(cl)
 
-  literals = [literal for clause in smallest_clauses for literal in clause]
-  unique_literals = set([abs(literal) for literal in literals])
-  counts = map(lambda x: (x, literals.count(x), literals.count(-x)), unique_literals)
-  counts = map(lambda x: (x[0], (x[1]+x[2])**(2**k)+(x[1]*x[2]), x[1], x[2]), counts)
-  literal = sorted(counts, key=lambda x: x[1], reverse=True)[0]
-  if literal[2] > literal[3]:
-    return literal[0]
-  else:
-    return -literal[0]
+  target_clauses = smallest_clauses if smallest_len is not None else [list(c) for c in clauses]
+  if not target_clauses:
+    return any_lit if any_lit != 0 else 1
+
+  lits = [l for cl in target_clauses for l in cl]
+  if not lits:
+    return any_lit if any_lit != 0 else 1
+  vars_set = {abs(l) for l in lits}
+
+  best_var = None
+  best_score = (-1.0, -1.0)  # (score, max polarity count) for tiebreak
+  best_polarity = 1
+
+  for v in vars_set:
+    f_pos = lits.count(v)
+    f_neg = lits.count(-v)
+    score = (f_pos + f_neg) * (2 ** k) + (f_pos * f_neg)
+    # choose polarity with larger count; tie -> positive
+    pol = 1 if f_pos >= f_neg else -1
+    key = (score, max(f_pos, f_neg))
+    if key > best_score:
+      best_score = key
+      best_var = v
+      best_polarity = pol
+
+  if best_var is None:
+    return any_lit if any_lit != 0 else 1
+  return best_var if best_polarity > 0 else -best_var
 
 
 def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> Tuple[str, List[int] | None]:
@@ -178,6 +202,16 @@ def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> T
   # (clauses_snapshot, model_snapshot, alt_literal)
   stack: List[Tuple[List[List[int]], List[int], int]] = []
 
+  # Lightweight failed-literal detection: unit-propagate quickly to see if a branch is doomed
+  def quick_unit_ok(cls: List[List[int]]) -> bool:
+    while True:
+      found, u = has_unit_clause(cls)
+      if not found:
+        return not has_empty_clause(cls)
+      cls = remove_literal(cls, u)
+      if has_empty_clause(cls):
+        return False
+
   while True:
     # 1. Simplify to a local fixpoint
     status, maybe_clauses, maybe_model = simplify(current_clauses, current_model)
@@ -200,6 +234,10 @@ def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> T
 
     # Choose a branching literal and push the alternative branch for later
     lit = select_literal(current_clauses)
+    # Simple failed-literal check: if picking lit quickly contradicts, flip polarity
+    try_cls = remove_literal(current_clauses, lit)
+    if not quick_unit_ok(try_cls):
+      lit = -lit
     # Save state to try the opposite polarity later
     stack.append((current_clauses, current_model, -lit))
     # Take the chosen branch immediately
