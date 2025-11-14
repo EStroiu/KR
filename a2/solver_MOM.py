@@ -1,24 +1,6 @@
-"""
-SAT Assignment Part 2 - Non-consecutive Sudoku Solver (Puzzle -> SAT/UNSAT)
-
-THIS is the file to edit.
-
-Implement: solve_cnf(clauses) -> (status, model_or_None)
-
-Notes:
-- This file contains a DPLL-style solver with:
-  - unit propagation (to a fixpoint),
-  - pure literal elimination (to a fixpoint), and
-  - an improved branching heuristic (Jeroslow–Wang).
-  The core search (dp) is implemented iteratively (non-recursive) to avoid
-  recursion limits while preserving the same public API so the evaluator can
-  instrument it.
-  It prioritizes correctness and clarity so it can be evaluated by the provided script.
-"""
-
-
 from typing import Iterable, List, Tuple, Optional
 from random import choice
+from collections import Counter
 
 
 # For majority of optimizations bellow we took inspiration from original DPLL algorithm,
@@ -116,14 +98,15 @@ def select_literal(clauses: Iterable[Iterable[int]]) -> int:
   if not lits:
     return any_lit if any_lit != 0 else 1
   vars_set = {abs(l) for l in lits}
+  cnt = Counter(lits)
 
   best_var = None
   best_score = (-1.0, -1.0)  # (score, max polarity count) for tiebreak
   best_polarity = 1
 
   for v in vars_set:
-    f_pos = lits.count(v)
-    f_neg = lits.count(-v)
+    f_pos = cnt.get(v, 0)
+    f_neg = cnt.get(-v, 0)
     score = (f_pos + f_neg) * (2 ** k) + (f_pos * f_neg)
     # choose polarity with larger count; tie -> positive
     pol = 1 if f_pos >= f_neg else -1
