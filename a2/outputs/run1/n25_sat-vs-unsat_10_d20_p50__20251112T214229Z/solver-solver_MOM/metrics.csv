@@ -1,0 +1,11 @@
+size,clue_density,n_clues,num_vars,n_clauses,status,wall_time_s,dp_calls,unit_clause_checks,pure_literal_checks,remove_literal_calls,select_literal_calls,model_len,model_cnf_valid,model_semantic_valid,error,expected_status,is_correct
+25,0.1872,117,15625,810217,UNSAT,411.4728540270007,1,6497,0,6497,0,0,,,,UNSAT,True
+25,0.1904,119,15625,810219,UNSAT,262.0985846629992,1,3562,0,3562,0,0,,,,UNSAT,True
+25,0.184,115,15625,810215,ERROR,483.1567672489982,1,8418,1,8416,1,0,,,solve: TypeError: object of type 'int' has no len(),SAT,False
+25,0.192,120,15625,810220,ERROR,482.9931970749967,1,8678,1,8676,1,0,,,solve: TypeError: object of type 'int' has no len(),SAT,False
+25,0.2192,137,15625,810237,ERROR,502.90404128500086,1,9478,1,9476,1,0,,,solve: TypeError: object of type 'int' has no len(),SAT,False
+25,0.2,125,15625,810225,ERROR,485.89012520800316,1,8826,1,8824,1,0,,,solve: TypeError: object of type 'int' has no len(),SAT,False
+25,0.1824,114,15625,810214,UNSAT,409.1085268329989,1,6469,0,6469,0,0,,,,UNSAT,True
+25,0.216,135,15625,810235,UNSAT,156.57343010500335,1,1971,0,1971,0,0,,,,UNSAT,True
+25,0.2112,132,15625,810232,ERROR,494.5184356630052,1,9137,1,9135,1,0,,,solve: TypeError: object of type 'int' has no len(),SAT,False
+25,0.2096,131,15625,810231,UNSAT,252.13873616100318,1,3403,0,3403,0,0,,,,UNSAT,True
