@@ -97,7 +97,7 @@ def process_heuristic(dirs: list[pathlib.Path]):
         data = get_data(get_path(dir, "_MOM"), dir.name, data, "MOM")
         type = "random" if "random" in dir.name else "unsat" if "unsat" in dir.name else "sat"
         if "clues" in dir.name:
-            chance = "d10" if "d10" in dir else "d30" if "d30" in dir else "d50"
+            chance = "d10" if "d10" in dir.name else "d30" if "d30" in dir.name else "d50"
             if "random" in dir.name:
                 plot_both(data, f"{type}_{chance}_random_clues_heuristics.png")
             else:
@@ -115,6 +115,11 @@ def heuristics(path: str, baseline: bool, clues: bool):
     if baseline:
         plt.rcParams["figure.figsize"] = plt.rcParamsDefault["figure.figsize"]
         current_dirs = [dir for dir in dirs if "d20" in dir.name]
+        process_heuristic(current_dirs)
+
+    if clues:
+        plt.rcParams["figure.figsize"] = (13,4.8)
+        current_dirs = [dir for dir in dirs if "clues" in dir.name]
         process_heuristic(current_dirs)
 
 def main():
