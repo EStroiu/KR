@@ -1,24 +1,6 @@
-"""
-SAT Assignment Part 2 - Non-consecutive Sudoku Solver (Puzzle -> SAT/UNSAT)
-
-THIS is the file to edit.
-
-Implement: solve_cnf(clauses) -> (status, model_or_None)
-
-Notes:
-- This file contains a DPLL-style solver with:
-  - unit propagation (to a fixpoint),
-  - pure literal elimination (to a fixpoint), and
-  - an improved branching heuristic (Jeroslow–Wang).
-  The core search (dp) is implemented iteratively (non-recursive) to avoid
-  recursion limits while preserving the same public API so the evaluator can
-  instrument it.
-  It prioritizes correctness and clarity so it can be evaluated by the provided script.
-"""
-
-
 from typing import Iterable, List, Tuple, Optional
 from random import choice
+from collections import Counter
 
 
 # For majority of optimizations bellow we took inspiration from original DPLL algorithm,
@@ -85,26 +67,53 @@ def remove_literal(clauses: Iterable[Iterable[int]], literal: int) -> List[List[
 # SOURCE: www.cs.cmu.edu/~emc/15-820A/reading/sat_cmu.pdf
 # Use of Early branching Heuristics
 def select_literal(clauses: Iterable[Iterable[int]]) -> int:
-  """We pick a branching literal using MOM's heuristic.
+  """Pick a branching literal using DLIS (choose polarity with max occurrences).
 
-  MOM's score(l) = [f*(l)+f*(l')]2^k+f*(l)f*(l').
-  f*(l) is the number of times l occurss in the smallest no satisfied clauses, and
-  k is a tuning aprameter
+  We optionally bias to the smallest non-unit clauses: if any exist, we count occurrences
+  only among clauses with minimal length > 1; otherwise, count across all clauses.
   """
-  literals = [literal for clause in clauses for literal in clause]
-  unique_literals = set([abs(literal) for literal in literals])
+  # Gather clauses and track smallest non-unit length
+  clists: List[List[int]] = []
+  min_len: Optional[int] = None
+  any_lit = 0
+  for c in clauses:
+    cl = c if isinstance(c, list) else list(c)
+    clists.append(cl)
+    if cl:
+      any_lit = any_lit or cl[0]
+    m = len(cl)
+    if m > 1 and (min_len is None or m < min_len):
+      min_len = m
 
-  largest_count = 0
-  largest_literal = 0
-  counts = list(map(lambda x: (x, literals.count(x), literals.count(-x)), unique_literals))
-  for count in counts:
-    if count[1] > largest_count:
-      largest_count = count[2]
-      largest_literal = count[0]
+  if not clists:
+    return any_lit if any_lit != 0 else 1
+
+  if min_len is not None:
+    pool = [cl for cl in clists if len(cl) == min_len]
+  else:
+    pool = clists
+
+  lits = [l for cl in pool for l in cl]
+  if not lits:
+    return any_lit if any_lit != 0 else 1
+
+  vars_set = {abs(l) for l in lits}
+  cnt = Counter(lits)
+  best = None  # (count, literal)
+  for v in vars_set:
+    c_pos = cnt.get(v, 0)
+    c_neg = cnt.get(-v, 0)
+    # choose stronger polarity; tie -> positive
+    if c_pos >= c_neg:
+      cand = (c_pos, v)
     else:
-      largest_literal = -abs(largest_literal)
+      cand = (c_neg, -v)
+    if best is None or cand[0] > best[0]:
+      best = cand
 
-  return largest_literal
+  if best is None or best[0] <= 0:
+    return any_lit if any_lit != 0 else 1
+  return best[1]
 
 
 def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> Tuple[str, List[int] | None]:
@@ -171,6 +180,16 @@ def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> T
   # (clauses_snapshot, model_snapshot, alt_literal)
   stack: List[Tuple[List[List[int]], List[int], int]] = []
 
+  # Lightweight failed-literal detection: unit-propagate quickly to see if a branch is doomed
+  def quick_unit_ok(cls: List[List[int]]) -> bool:
+    while True:
+      found, u = has_unit_clause(cls)
+      if not found:
+        return not has_empty_clause(cls)
+      cls = remove_literal(cls, u)
+      if has_empty_clause(cls):
+        return False
+
   while True:
     # 1. Simplify to a local fixpoint
     status, maybe_clauses, maybe_model = simplify(current_clauses, current_model)
@@ -186,11 +205,17 @@ def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> T
       continue
 
     # Continue search with simplified state
-    current_clauses = maybe_clauses or current_clauses
-    current_model = maybe_model or current_model
+    # Assign directly; do not use truthiness fallbacks that could swallow empty lists.
+    assert maybe_clauses is not None and maybe_model is not None
+    current_clauses = maybe_clauses
+    current_model = maybe_model
 
     # Choose a branching literal and push the alternative branch for later
     lit = select_literal(current_clauses)
+    # Simple failed-literal check: if picking lit quickly contradicts, flip polarity
+    try_cls = remove_literal(current_clauses, lit)
+    if not quick_unit_ok(try_cls):
+      lit = -lit
     # Save state to try the opposite polarity later
     stack.append((current_clauses, current_model, -lit))
     # Take the chosen branch immediately

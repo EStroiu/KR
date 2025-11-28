@@ -1,47 +1,8 @@
-#!/usr/bin/env python3
-"""
-Evaluate the SAT solver on randomly generated Non-consecutive Sudoku puzzles.
+# So this is quite a large script, we do not use everything, but for the a2 and a3 we did need to do a lot of 
+# testing, hence the size. There are quite a lot of helpers for verifying inputs and outputs, this way
+# we try and make sure that encoder and solvers behave as we expect them to. We probably could have added
+# more tests, but writing the existing ones already took a while.
 
-This script generates puzzles compatible with the encoder in `encoder.py`,
-encodes them to CNF, runs `solver.solve_cnf`, and collects metrics and plots.
-
-Compared with the original script, this version:
- - can generate solved grids locally using randomized backtracking (fast for N=4,9)
- - can create guaranteed-SAT puzzles by masking a solved grid
- - can create guaranteed-UNSAT puzzles by injecting a conflict and forcing those conflicting
-     cells to remain visible after masking (guarantees UNSAT labeling)
- - for suite-mode=sat, selects an exact per-size count of UNSAT instances based on
-     --unsat-proportion (instead of per-instance Bernoulli), ensuring the requested proportion
- - records per-instance ground-truth labels (expected SAT/UNSAT) when known and
-     prints labeled accuracy, a confusion matrix, and performance summaries split by
-     predicted and expected status
-
-Outputs:
-    - CSV with one row per instance (outdir/metrics.csv)
-    - Plots (PNG):
-            * time_by_size.png (combined SAT+UNSAT successful runs)
-            * time_by_size_sat.png (SAT only)
-            * time_by_size_unsat.png (UNSAT only)
-            * time_by_size_sat_unsat.png (SAT vs UNSAT side-by-side per size)
-            * status_counts.png
-            * time_vs_dp_calls.png
-    - Temporary puzzles stored in outdir/tmp
-
-Usage examples:
-  python3 a2/evaluate.py --sizes 4 9 --instances-per-size 20 --clue-density 0.5 \
-      --suite-mode sat --unsat-proportion 0.2 --gen-timeout 10 --timeout 5 --outdir a2/outputs
-    python3 a2/evaluate.py --solver a2/solver_MOM.py --sizes 9 --instances-per-size 5 --clue-density 0.3
-    python3 a2/evaluate.py --solver solver_JW --sizes 4 9 --suite-mode sat --unsat-proportion 0.1
-        python3 a2/evaluate.py --suite-mode folder --puzzle-dir puzzles --solver a2/solver_JW.py --outdir a2/outputs
-
-Note:
- - This script assumes `encoder.py` and your `solver` module (imported as solver_mod)
-   are present and compatible with the rest of the code.
- - Generation does not use your solver (avoids gen-timeout failures).
- - You can select an alternative solver implementation via --solver providing either
-        a module name (e.g. solver_MOM or a2.solver_MOM) or a path to a .py file (e.g. a2/solver_MOM.py).
- - Suite mode 'folder' evaluates all .txt puzzles in --puzzle-dir (each row space-separated integers; 0 for empty). --sizes and --instances-per-size are ignored in this mode.
-"""
 from __future__ import annotations
 
 import argparse
@@ -55,30 +16,26 @@ import tempfile
 import time
 from dataclasses import dataclass, asdict
 from typing import Callable, Dict, Iterable, List, Optional, Tuple, Set
+import matplotlib.patches as mpatches 
 
-# Local modules (must exist in the same package)
+
+# loading solver and encoder from previous assignments
 import encoder
-# Default solver import; can be overridden by --solver option.
 import solver as solver_mod  # type: ignore
 
-# Dynamic solver loading helper
+# a helper to load other solvers with different heuristics
 import importlib.util
 import importlib
 from types import ModuleType
 
 def load_solver(path_or_name: str) -> ModuleType:
-    """Load a solver module given either a filesystem path to a .py file or a module name.
-
-    Accepts examples like:
+    """
+    Accepts examples like (otherwise add more later):
       --solver solver               (regular import by name in PYTHONPATH)
       --solver a2.solver_MOM        (qualified module name)
       --solver a2/solver_MOM.py     (filesystem relative path)
       --solver ./a2/solver_JW.py    (relative path)
-
-    Returns the loaded module object. Raises ImportError / FileNotFoundError on failure.
-    The loaded module must provide solve_cnf(...) plus any optional functions used for instrumentation.
     """
-    # If it looks like a path (endswith .py or contains a path separator), treat as file path
     if path_or_name.endswith('.py') or os.sep in path_or_name:
         path = os.path.abspath(path_or_name)
         if not os.path.isfile(path):
@@ -88,9 +45,8 @@ def load_solver(path_or_name: str) -> ModuleType:
         if spec is None or spec.loader is None:
             raise ImportError(f"Could not create import spec for solver at {path}")
         mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)  # type: ignore[attr-defined]
+        spec.loader.exec_module(mod)
         return mod
-    # Otherwise treat as module name
     return importlib.import_module(path_or_name)
 
 
@@ -116,9 +72,7 @@ class InstanceResult:
     is_correct: Optional[bool] = None     # True/False if expected known, else None
 
 
-# ---------------------------
-# Local generator utilities
-# ---------------------------
+# Generate sudoku puzzles functions
 def generate_solved_grid(
     n: int,
     rng: Optional[random.Random] = None,
@@ -126,14 +80,7 @@ def generate_solved_grid(
     max_tries: int = 200000,
     restarts: int = 50,
 ) -> Optional[List[List[int]]]:
-    """MRV + backtracking generator with randomized restarts.
-
-    - n must be a perfect square.
-    - non_consecutive enforces orthogonal neighbors not differ by 1 (checked
-      only against already placed neighbors).
-    - max_tries limits total backtrack steps per attempt.
-    - restarts controls how many independent attempts we make (with different RNG state).
-    """
+    
     if rng is None:
         rng = random.Random()
     b = int(math.isqrt(n))
@@ -143,7 +90,7 @@ def generate_solved_grid(
     digits = list(range(1, n + 1))
 
     def one_attempt(seed_offset: int = 0) -> Optional[List[List[int]]]:
-        # local RNG so restarts differ
+        # local randomness so restarts differ
         local_rng = random.Random(rng.randint(0, 2**31 - 1) ^ seed_offset)
         grid = [[0] * n for _ in range(n)]
         rows = [set() for _ in range(n)]
@@ -171,7 +118,6 @@ def generate_solved_grid(
             return can
 
         def find_mrv_cell() -> Optional[Tuple[int, int, List[int]]]:
-            # return (r, c, candidates) for empty cell with smallest candidate set
             best = None
             best_len = None
             for r in range(n):
@@ -195,7 +141,7 @@ def generate_solved_grid(
             # find an empty cell with MRV
             cell = find_mrv_cell()
             if cell is None:
-                return True  # filled everything
+                return True 
             r, c, cand = cell
             if len(cand) == 0:
                 return False
@@ -216,7 +162,7 @@ def generate_solved_grid(
         ok = backtrack()
         return grid if ok else None
 
-    # Try several independent attempts (randomized)
+    # finally, try several independent attempts (randomized)
     for attempt in range(restarts):
         res = one_attempt(attempt)
         if res is not None:
@@ -224,9 +170,8 @@ def generate_solved_grid(
     return None
 
 
-
+# Simply mask a solved grid according to density -> returns a puzzle with zeros where masked.
 def mask_grid(grid: List[List[int]], density: float, rng: random.Random = None) -> List[List[int]]:
-    """Mask a solved grid according to density -> returns a puzzle with zeros where masked."""
     if rng is None:
         rng = random.Random()
     n = len(grid)
@@ -239,11 +184,8 @@ def mask_grid(grid: List[List[int]], density: float, rng: random.Random = None) 
                 out[r][c] = 0
     return out
 
-
+# Turn a solved grid into an UNSAT puzzle by introducing an obvious conflict.
 def make_unsat_from_solution(grid: List[List[int]], rng: random.Random = None) -> List[List[int]]:
-    """Turn a solved grid into an UNSAT puzzle by introducing an obvious conflict.
-    Example: pick a cell and replace its value with a value already present in the same row.
-    """
     if rng is None:
         rng = random.Random()
     n = len(grid)
@@ -251,7 +193,7 @@ def make_unsat_from_solution(grid: List[List[int]], rng: random.Random = None) -
     # pick a cell at random
     r = rng.randrange(n)
     c = rng.randrange(n)
-    # pick an existing digit from the same row (ensures a row conflict)
+    # pick an existing digit from the same row
     row_choices = [new_grid[r][j] for j in range(n) if j != c]
     if not row_choices:
         # fallback: use column choices
@@ -267,13 +209,11 @@ def make_unsat_from_solution(grid: List[List[int]], rng: random.Random = None) -
     return new_grid
 
 
+# Now we mask a solved grid but always reveal the given forced_cells as clues.
+# This ensures contradictions we intend to expose remain in the puzzle after masking.
 def mask_grid_with_forced(
     grid: List[List[int]], density: float, forced_cells: Iterable[Tuple[int, int]], rng: Optional[random.Random] = None
 ) -> List[List[int]]:
-    """Mask a solved grid but always reveal the given forced_cells as clues.
-
-    Ensures contradictions we intend to expose remain in the puzzle after masking.
-    """
     if rng is None:
         rng = random.Random()
     forced: Set[Tuple[int, int]] = set(forced_cells)
@@ -288,15 +228,13 @@ def mask_grid_with_forced(
     return out
 
 
+# Create an UNSAT-inducing modification and return conflict cells to force as clues.
+# We pick a row r and two distinct columns c1, c2 and set new_grid[r][c1] = new_grid[r][c2],
+# creating a duplicate in row r. Returning both (r,c1) and (r,c2) allows masking to keep
+# the contradiction visible which results in UNSAT.
 def make_unsat_with_forced_conflict(
     grid: List[List[int]], rng: Optional[random.Random] = None
 ) -> Tuple[List[List[int]], List[Tuple[int, int]]]:
-    """Create an UNSAT-inducing modification and return conflict cells to force as clues.
-
-    We pick a row r and two distinct columns c1, c2 and set new_grid[r][c1] = new_grid[r][c2],
-    creating a duplicate in row r. Returning both (r,c1) and (r,c2) allows masking to keep
-    the contradiction visible, guaranteeing UNSAT.
-    """
     if rng is None:
         rng = random.Random()
     n = len(grid)
@@ -308,24 +246,19 @@ def make_unsat_with_forced_conflict(
     return new_grid, forced
 
 
-# ---------------------------
-# Existing helper functions
-# ---------------------------
 def _var_index(r: int, c: int, v: int, N: int) -> int:
     return r * N * N + c * N + v
 
-
+# Helper to check that model satisfies all clauses. Model is a list of assigned literals.
 def verify_cnf_satisfied(clauses: Iterable[Iterable[int]], model: List[int]) -> bool:
-    """Check that model satisfies all clauses. Model is a list of assigned literals."""
     assign = set(model)
     for cl in clauses:
         if not any(l in assign for l in cl):
             return False
     return True
 
-
+# Helper to decode positive literals in the model to an N x N grid. Return None if ambiguous.
 def decode_model_to_grid(model: List[int], N: int) -> Optional[List[List[int]]]:
-    """Decode positive literals in the model to an N x N grid. Return None if ambiguous."""
     grid = [[0 for _ in range(N)] for _ in range(N)]
     chosen: List[List[List[int]]] = [[[] for _ in range(N)] for _ in range(N)]
     for lit in model:
@@ -349,9 +282,8 @@ def decode_model_to_grid(model: List[int], N: int) -> Optional[List[List[int]]]:
                 return None
     return grid
 
-
+# Unit test for decoder
 def verify_grid_semantics(grid: List[List[int]], clues: List[List[int]]) -> bool:
-    """Verify Sudoku+non-consecutive constraints and clues on a filled grid."""
     N = len(grid)
     B = int(math.isqrt(N))
     if B * B != N:
@@ -391,7 +323,7 @@ def verify_grid_semantics(grid: List[List[int]], clues: List[List[int]]) -> bool
             if len(set(vals)) != N:
                 return False
 
-    # Non-consecutive (orthogonal neighbors not differing by 1)
+    # Test 6: Non-consecutive (orthogonal neighbors not differing by 1)
     for r in range(N):
         for c in range(N):
             v = grid[r][c]
@@ -402,12 +334,9 @@ def verify_grid_semantics(grid: List[List[int]], clues: List[List[int]]) -> bool
 
     return True
 
-
+# Check if the given clues alone already violate Sudoku+non-consecutive rules.
+# If it's true, then the puzzle is definetly UNSAT
 def clues_have_semantic_conflict(clues: List[List[int]]) -> bool:
-    """Check if the given clues alone already violate Sudoku+non-consecutive rules.
-
-    If True, the puzzle is guaranteed UNSAT; otherwise, it may still be SAT or UNSAT.
-    """
     N = len(clues)
     B = int(math.isqrt(N))
     if B * B != N:
@@ -468,9 +397,7 @@ def clues_have_semantic_conflict(clues: List[List[int]]) -> bool:
     return False
 
 
-# ---------------------------
 # Instrumentation wrappers for the solver
-# ---------------------------
 def _make_instrumentation() -> Tuple[Dict[str, int], Dict[str, Callable], Dict[str, Callable]]:
     counters = {
         "dp_calls": 0,
@@ -483,21 +410,19 @@ def _make_instrumentation() -> Tuple[Dict[str, int], Dict[str, Callable], Dict[s
     originals: Dict[str, Callable] = {}
     wrappers: Dict[str, Callable] = {}
 
-    # Wrap dp
     if hasattr(solver_mod, "dp"):
         originals["dp"] = solver_mod.dp
 
-        def dp_wrap(clauses: Iterable[Iterable[int]]):  # type: ignore
+        def dp_wrap(clauses: Iterable[Iterable[int]]): 
             counters["dp_calls"] += 1
             return originals["dp"](clauses)
 
         wrappers["dp"] = dp_wrap
 
-    # Wrap has_unit_clause
     if hasattr(solver_mod, "has_unit_clause"):
         originals["has_unit_clause"] = solver_mod.has_unit_clause
 
-        def has_unit_clause_wrap(clauses: Iterable[Iterable[int]]):  # type: ignore
+        def has_unit_clause_wrap(clauses: Iterable[Iterable[int]]): 
             counters["unit_clause_checks"] += 1
             return originals["has_unit_clause"](clauses)
 
@@ -507,7 +432,7 @@ def _make_instrumentation() -> Tuple[Dict[str, int], Dict[str, Callable], Dict[s
     if hasattr(solver_mod, "has_literal"):
         originals["has_literal"] = solver_mod.has_literal
 
-        def has_literal_wrap(clauses: Iterable[Iterable[int]]):  # type: ignore
+        def has_literal_wrap(clauses: Iterable[Iterable[int]]): 
             counters["pure_literal_checks"] += 1
             return originals["has_literal"](clauses)
 
@@ -517,7 +442,7 @@ def _make_instrumentation() -> Tuple[Dict[str, int], Dict[str, Callable], Dict[s
     if hasattr(solver_mod, "remove_literal"):
         originals["remove_literal"] = solver_mod.remove_literal
 
-        def remove_literal_wrap(clauses: Iterable[Iterable[int]], literal: int):  # type: ignore
+        def remove_literal_wrap(clauses: Iterable[Iterable[int]], literal: int):
             counters["remove_literal_calls"] += 1
             return originals["remove_literal"](clauses, literal)
 
@@ -527,7 +452,7 @@ def _make_instrumentation() -> Tuple[Dict[str, int], Dict[str, Callable], Dict[s
     if hasattr(solver_mod, "select_literal"):
         originals["select_literal"] = solver_mod.select_literal
 
-        def select_literal_wrap(clauses: Iterable[Iterable[int]]):  # type: ignore
+        def select_literal_wrap(clauses: Iterable[Iterable[int]]):
             counters["select_literal_calls"] += 1
             return originals["select_literal"](clauses)
 
@@ -546,9 +471,7 @@ def _restore_originals(originals: Dict[str, Callable]) -> None:
         setattr(solver_mod, name, func)
 
 
-# ---------------------------
 # Timeout helpers
-# ---------------------------
 class Timeout(Exception):
     pass
 
@@ -557,13 +480,11 @@ def _timeout_handler(signum, frame):  # noqa: ARG001
     raise Timeout()
 
 
-# ---------------------------
-# Run / evaluation logic
-# ---------------------------
+# Evaluation logic
+# We generate an N x N puzzle with values in 0..N (0 means empty).
+# Each cell is a clue with probability `density`; clues are uniform in 1..N.
 def generate_random_puzzle(n: int, density: float, rng: random.Random) -> List[List[int]]:
-    """Generate an N x N puzzle with values in 0..N (0 means empty).
-    Each cell is a clue with probability `density`; clues are uniform in 1..N.
-    """
+
     b = int(math.isqrt(n))
     if b * b != n:
         raise ValueError(f"N must be a perfect square; got N={n}")
@@ -578,9 +499,8 @@ def generate_random_puzzle(n: int, density: float, rng: random.Random) -> List[L
         grid.append(row)
     return grid
 
-
+# Write puzzle to a temporary file and return its path. Save them so that we can inspect them later for debugging.
 def write_puzzle_tmp(grid: List[List[int]], tmp_dir: str) -> str:
-    """Write puzzle to a temporary file and return its path."""
     os.makedirs(tmp_dir, exist_ok=True)
     fd, path = tempfile.mkstemp(prefix="nc_sudoku_", suffix=".txt", dir=tmp_dir, text=True)
     with os.fdopen(fd, "w") as f:
@@ -595,7 +515,6 @@ def run_one_instance(
     tmp_dir: str,
     expected_status: Optional[str] = None,
 ) -> InstanceResult:
-    # Instrument
     counters, originals, wrappers = _make_instrumentation()
     _apply_wrappers(wrappers)
 
@@ -603,7 +522,7 @@ def run_one_instance(
     puzzle_path = write_puzzle_tmp(grid, tmp_dir)
     try:
         clauses, num_vars = encoder.to_cnf(puzzle_path)
-    except Exception as e:  # encoding error
+    except Exception as e:  # in case of encoder error, but should not happen
         _restore_originals(originals)
         n = len(grid)
         n_clues = sum(1 for r in grid for v in r if v != 0)
@@ -627,12 +546,12 @@ def run_one_instance(
 
     n = len(grid)
     n_clues = sum(1 for r in grid for v in r if v != 0)
-    # Materialize clauses once if needed to avoid consuming generators multiple times
+    # Make clauses once if needed to avoid consuming generators multiple times
     if not isinstance(clauses, list):
         clauses = list(clauses)
     n_clauses = len(clauses)
 
-    # Solve with timeout
+    # Now solve with timeout, better then running till completion
     started = time.perf_counter()
     old_handler = None
     timed_out = False
@@ -657,22 +576,21 @@ def run_one_instance(
             signal.signal(signal.SIGALRM, old_handler)
         _restore_originals(originals)
 
-    # Build result
     error_msg = ""
     if result_status == "ERROR":
-        error_msg = err  # type: ignore[name-defined]
+        error_msg = err 
 
     model_len = 0
     model_cnf_valid: Optional[bool] = None
     model_semantic_valid: Optional[bool] = None
     if result_status == "SAT":
         try:
-            # CNF validity
+            # we check CNF validity
             model = model or []
             model_len = len(model)
             cnf_ok = verify_cnf_satisfied(clauses, model)
             model_cnf_valid = cnf_ok
-            # Semantic validity (decode and check constraints)
+            # and also semantic validity (decode and check constraints)
             grid_dec = decode_model_to_grid(model, n)
             if grid_dec is not None:
                 sem_ok = verify_grid_semantics(grid_dec, grid)
@@ -683,7 +601,7 @@ def run_one_instance(
             model_cnf_valid = False
             model_semantic_valid = False
 
-    # Compute correctness if we have an expected status label
+    # Finally, we compute correctness if we have an expected status label
     is_correct: Optional[bool] = None
     if expected_status in ("SAT", "UNSAT"):
         is_correct = (result_status == expected_status)
@@ -727,10 +645,10 @@ def save_csv(rows: List[InstanceResult], path: str) -> None:
         for r in rows:
             writer.writerow(asdict(r))
 
-
+# Plotting functions for results.
 def try_make_plots(rows: List[InstanceResult], outdir: str) -> List[str]:
     try:
-        import matplotlib.pyplot as plt  # type: ignore
+        import matplotlib.pyplot as plt 
     except Exception:
         return []
 
@@ -847,28 +765,23 @@ def try_make_plots(rows: List[InstanceResult], outdir: str) -> List[str]:
             unsat_times.setdefault(r.size, []).append(r.wall_time_s)
     common_sizes = [n for n in sorted(set(sat_times.keys()) & set(unsat_times.keys())) if sat_times[n] and unsat_times[n]]
     if common_sizes:
-        # Side-by-side boxplots using manual positions
-        # Positions: for each size index i, SAT at i-0.15, UNSAT at i+0.15
+
         sat_data = [sat_times[n] for n in common_sizes]
         unsat_data = [unsat_times[n] for n in common_sizes]
         plt.figure(figsize=(7, 4))
         base_positions = list(range(len(common_sizes)))
         sat_positions = [p - 0.15 for p in base_positions]
         unsat_positions = [p + 0.15 for p in base_positions]
-        # Draw boxplots separately so we can label
         bp_sat = plt.boxplot(sat_data, positions=sat_positions, widths=0.25, patch_artist=True, showfliers=False)
         bp_unsat = plt.boxplot(unsat_data, positions=unsat_positions, widths=0.25, patch_artist=True, showfliers=False)
-        # Color styling
         for patch in bp_sat['boxes']:
-            patch.set_facecolor('#4daf4a')  # green
+            patch.set_facecolor('#4daf4a')
         for patch in bp_unsat['boxes']:
-            patch.set_facecolor('#e41a1c')  # red
+            patch.set_facecolor('#e41a1c')
         plt.xticks(base_positions, [str(n) for n in common_sizes])
         plt.xlabel("N")
         plt.ylabel("Seconds")
         plt.title("Solve time by size: SAT vs UNSAT")
-        # Legend proxy artists
-        import matplotlib.patches as mpatches  # type: ignore
         sat_patch = mpatches.Patch(color='#4daf4a', label='SAT')
         unsat_patch = mpatches.Patch(color='#e41a1c', label='UNSAT')
         plt.legend(handles=[sat_patch, unsat_patch])
@@ -881,6 +794,7 @@ def try_make_plots(rows: List[InstanceResult], outdir: str) -> List[str]:
     return paths
 
 
+# A lot of arguments, but they help when we benchmark.
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description="Evaluate the Non-consecutive Sudoku SAT solver on random instances.")
     ap.add_argument("--sizes", nargs="*", type=int, default=[4, 9], help="List of N (perfect squares) to test")
@@ -902,11 +816,10 @@ def main() -> None:
     args = parse_args()
     rng = random.Random(args.seed)
 
-    # Attempt dynamic solver loading per --solver argument
-    global solver_mod  # noqa: PLW0603
+    global solver_mod
     if args.solver:
         try:
-            solver_mod = load_solver(args.solver)  # type: ignore[assignment]
+            solver_mod = load_solver(args.solver)
             print(f"[info] Loaded solver module: {args.solver} -> {solver_mod.__name__}")
         except Exception as e:
             print(f"[error] Failed to load solver '{args.solver}': {e}")
@@ -916,7 +829,6 @@ def main() -> None:
     tmp_dir = os.path.join(args.outdir, "tmp")
     os.makedirs(tmp_dir, exist_ok=True)
 
-    # Folder mode: enumerate puzzle files and evaluate directly
     if args.suite_mode == "folder":
         puzzle_dir = args.puzzle_dir or os.path.join(os.path.dirname(__file__), "..", "puzzles")
         puzzle_dir = os.path.abspath(puzzle_dir)
@@ -935,7 +847,6 @@ def main() -> None:
                     for line in rows_raw:
                         parts = line.split()
                         grid.append([int(p) for p in parts])
-                    # basic validation: square and size is perfect square
                     n = len(grid)
                     if any(len(r) != n for r in grid):
                         raise ValueError("grid not square")
@@ -950,7 +861,6 @@ def main() -> None:
                 results.append(res)
                 print(f"{fname} -> N={n}, status={res.status} time={res.wall_time_s:.3f}s clauses={res.n_clauses}")
     else:
-        # Existing generation-based modes (random / sat)
         for n in args.sizes:
             # quick validation
             b = int(math.isqrt(n))
@@ -960,7 +870,6 @@ def main() -> None:
 
             base_solution: Optional[List[List[int]]] = None
             if args.suite_mode == "sat":
-                # Use local generator to obtain a solved grid (fast & robust)
                 try:
                     start_g = time.perf_counter()
                     base_solution = generate_solved_grid(n, rng, non_consecutive=True, max_tries=int(max(10000, args.gen_timeout * 1000)))
@@ -971,7 +880,6 @@ def main() -> None:
                 except Exception as e:
                     print(f"N={n}: error generating base solution: {e}; falling back to random suite.")
 
-            # Preselect UNSAT indices for sat mode
             unsat_indices: Set[int] = set()
             if base_solution is not None:
                 m = args.instances_per_size

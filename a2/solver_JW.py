@@ -1,22 +1,3 @@
-"""
-SAT Assignment Part 2 - Non-consecutive Sudoku Solver (Puzzle -> SAT/UNSAT)
-
-THIS is the file to edit.
-
-Implement: solve_cnf(clauses) -> (status, model_or_None)
-
-Notes:
-- This file contains a DPLL-style solver with:
-  - unit propagation (to a fixpoint),
-  - pure literal elimination (to a fixpoint), and
-  - an improved branching heuristic (Jeroslow–Wang).
-  The core search (dp) is implemented iteratively (non-recursive) to avoid
-  recursion limits while preserving the same public API so the evaluator can
-  instrument it.
-  It prioritizes correctness and clarity so it can be evaluated by the provided script.
-"""
-
-
 from typing import Iterable, List, Tuple, Optional
 from random import choice
 
@@ -70,10 +51,10 @@ def remove_literal(clauses: Iterable[Iterable[int]], literal: int) -> List[List[
   """Assign the given literal to True and simplify clauses accordingly."""
   new_clauses: List[List[int]] = []
   for clause in clauses:
-    # Clause satisfied -> drop
+    # clause satisfied -> drop
     if literal in clause:
       continue
-    # Remove negation -> shrink if present; otherwise reuse clause to avoid copy
+    # remove negation -> shrink if present; otherwise reuse clause to avoid copy
     if -literal in clause:
       new_clauses.append([l for l in clause if l != -literal])
     else:
@@ -85,31 +66,75 @@ def remove_literal(clauses: Iterable[Iterable[int]], literal: int) -> List[List[
 # SOURCE: https://en.wikipedia.org/wiki/Boolean_satisfiability_algorithm_heuristics?utm_source=chatgpt.com
 # Use of Early branching Heuristics
 def select_literal(clauses: Iterable[Iterable[int]]) -> int:
-  """We pick a branching literal using Jeroslow–Wang (JW) scores.
+  """Pick a branching literal using clause-aware two-sided Jeroslow–Wang (JW).
 
-  JW score(l) = sum over clauses c containing l of 2^(-|c|).
-  We choose the literal with the maximum JW score. If scores tie, fall back
-  to the first encountered literal. This method often chooses shorter clauses and
-  should reduce search depth.
+  Steps:
+    1) Compute JW scores pos/neg per variable over all clauses: 2^{-|c|} per occurrence.
+    2) Identify the smallest clause length m > 1 (if any). If such a clause exists,
+       pick among its literals the one with the higher JW literal score (polarity-aware).
+    3) Otherwise, choose the variable with max (pos+neg), break ties on max(pos,neg),
+       and set polarity to the stronger side (tie -> positive).
+
+  This focuses the search on the most constrained clauses while keeping JW's guidance.
   """
-  # Compute JW scores for both polarities independently
-  scores: dict[int, float] = {}
+  var_scores: dict[int, tuple[float, float]] = {}
   any_literal = 0
+  min_len = None
+  min_len_clauses: list[list[int]] = []
+
   for c in clauses:
-    k = len(c)
+    # ensure list for reuse and length
+    cl = c if isinstance(c, list) else list(c)
+    k = len(cl)
     if k == 0:
       continue
-    weight = 2.0 ** (-k)
-    for lit in c:
+    # track smallest non-unit clause(s) to guide branching
+    if k > 1 and (min_len is None or k < min_len):
+      min_len = k
+      min_len_clauses = [cl]
+    elif k > 1 and k == min_len:
+      min_len_clauses.append(cl)
+
+    w = 2.0 ** (-k)
+    for lit in cl:
       any_literal = any_literal or lit
-      scores[lit] = scores.get(lit, 0.0) + weight
-  if not scores:
+      v = abs(lit)
+      pos, neg = var_scores.get(v, (0.0, 0.0))
+      if lit > 0:
+        pos += w
+      else:
+        neg += w
+      var_scores[v] = (pos, neg)
+
+  if not var_scores:
     # Degenerate case: no literals — shouldn't happen due to terminal checks,
     # but keep just in case.
     return any_literal if any_literal != 0 else 1
 
-  # Finally, choose literal with the best score
-  best_lit = max(scores.items(), key=lambda kv: kv[1])[0]
+  # If we have any non-unit clauses, pick a literal from the smallest one guided by JW
+  if min_len is not None and min_len_clauses:
+    # Aggregate candidates from a few smallest clauses (helps avoid unlucky single-clause picks)
+    candidates: set[int] = set()
+    # Limit how many of the smallest clauses we consider to keep overhead tiny
+    cap = 4
+    for cl in min_len_clauses[:cap]:
+      for lit in cl:
+        candidates.add(lit)
+    # Score each candidate literal using the already-computed var_scores polarity components
+    def lit_score(l: int) -> float:
+      pos, neg = var_scores.get(abs(l), (0.0, 0.0))
+      return pos if l > 0 else neg
+    # Choose the candidate literal with the highest literal JW score; break ties on abs JW and then positive polarity
+    best_lit = max(candidates, key=lambda l: (lit_score(l), max(var_scores.get(abs(l), (0.0, 0.0))), l > 0))
+    return best_lit
+
+  # Fallback: choose variable with highest combined score; tie-break on stronger polarity
+  def var_key(item: tuple[int, tuple[float, float]]):
+    pos, neg = item[1]
+    return (pos + neg, max(pos, neg))
+
+  best_v, (best_pos, best_neg) = max(var_scores.items(), key=var_key)
+  best_lit = best_v if best_pos >= best_neg else -best_v
   return best_lit
 
 
@@ -177,6 +202,18 @@ def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> T
   # (clauses_snapshot, model_snapshot, alt_literal)
   stack: List[Tuple[List[List[int]], List[int], int]] = []
 
+  # Lightweight failed-literal detection: quickly propagate units to catch
+  # immediate contradictions for a prospective literal. This is intentionally
+  # cheaper than full simplify (no pure-literal loop here).
+  def quick_unit_ok(cls: List[List[int]]) -> bool:
+    while True:
+      found, u = has_unit_clause(cls)
+      if not found:
+        return not has_empty_clause(cls)
+      cls = remove_literal(cls, u)
+      if has_empty_clause(cls):
+        return False
+
   while True:
     # 1. Simplify to a local fixpoint
     status, maybe_clauses, maybe_model = simplify(current_clauses, current_model)
@@ -192,11 +229,19 @@ def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> T
       continue
 
     # Continue search with simplified state
-    current_clauses = maybe_clauses or current_clauses
-    current_model = maybe_model or current_model
+    # On CONTINUE, simplify guarantees non-None values; assign directly to avoid
+    # swallowing legitimate empty lists with truthiness checks.
+    assert maybe_clauses is not None and maybe_model is not None
+    current_clauses = maybe_clauses
+    current_model = maybe_model
 
     # Choose a branching literal and push the alternative branch for later
     lit = select_literal(current_clauses)
+    # Simple failed-literal check: if choosing lit immediately leads to a fast
+    # contradiction under unit propagation, flip polarity.
+    try_cls = remove_literal(current_clauses, lit)
+    if not quick_unit_ok(try_cls):
+      lit = -lit
     # Save state to try the opposite polarity later
     stack.append((current_clauses, current_model, -lit))
     # Take the chosen branch immediately

@@ -168,8 +168,10 @@ def dp(clauses: Iterable[Iterable[int]], model: Optional[List[int]] = None) -> T
       continue
 
     # Continue search with simplified state
-    current_clauses = maybe_clauses or current_clauses
-    current_model = maybe_model or current_model
+    # Assign directly; do not use truthiness fallbacks that could swallow empty lists.
+    assert maybe_clauses is not None and maybe_model is not None
+    current_clauses = maybe_clauses
+    current_model = maybe_model
 
     # Choose a branching literal and push the alternative branch for later
     lit = select_literal(current_clauses)

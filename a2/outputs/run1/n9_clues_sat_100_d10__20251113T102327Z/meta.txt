@@ -1,0 +1,11 @@
+description: n9_clues_sat_100_d10
+timestamp_utc: 20251113T102327Z
+repo_root: /home/ricardo/Desktop/KR/a2
+python: Python 3.12.2
+evaluate: /home/ricardo/Desktop/KR/a2/evaluate.py
+solvers: solver.py solver_JW.py solver_MOM.py solver_DLIS.py
+timeout_9: 120
+timeout_25: 600
+gen_timeout: 60
+seed: 42
+args: --suite-mode sat --sizes 9 --instances-per-size 100 --clue-density 0.1 --unsat-proportion 0.0

@@ -1,0 +1,11 @@
+description: n25_sat-vs-unsat_10_d20_p50
+timestamp_utc: 20251114T132047Z
+repo_root: /home/ricardo/Desktop/KR/a2
+python: Python 3.12.2
+evaluate: /home/ricardo/Desktop/KR/a2/evaluate.py
+solvers: solver_JW.py solver_MOM.py solver_DLIS.py
+timeout_9: 120
+timeout_25: 600
+gen_timeout: 60
+seed: 42
+args: --suite-mode sat --sizes 25 --instances-per-size 10 --clue-density 0.2 --unsat-proportion 0.5

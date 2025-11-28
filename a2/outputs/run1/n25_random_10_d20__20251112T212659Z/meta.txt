@@ -1,0 +1,11 @@
+description: n25_random_10_d20
+timestamp_utc: 20251112T212659Z
+repo_root: /home/ricardo/Desktop/KR/a2
+python: Python 3.12.2
+evaluate: /home/ricardo/Desktop/KR/a2/evaluate.py
+solvers: solver.py solver_JW.py solver_MOM.py solver_DLIS.py
+timeout_9: 120
+timeout_25: 600
+gen_timeout: 60
+seed: 42
+args: --suite-mode random --sizes 25 --instances-per-size 10 --clue-density 0.2
