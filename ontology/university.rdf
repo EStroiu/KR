@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
-<rdf:RDF xmlns="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#"
-     xml:base="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6"
+<rdf:RDF xmlns="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6/"
+     xml:base="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6/"
      xmlns:owl="http://www.w3.org/2002/07/owl#"
      xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
      xmlns:xml="http://www.w3.org/XML/1998/namespace"
@@ -74,102 +74,6 @@
     
 
 
-    <!-- http://webprotege.stanford.edu/R7JM3cUhZfrj4pxbLwnw4ka -->
-
-    <owl:Class rdf:about="http://webprotege.stanford.edu/R7JM3cUhZfrj4pxbLwnw4ka">
-        <rdfs:subClassOf rdf:resource="http://webprotege.stanford.edu/R7fq8cnd5Woc73JFDgxlj8x"/>
-        <rdfs:label xml:lang=".ttl">ElectiveCourse</rdfs:label>
-    </owl:Class>
-    
-
-
-    <!-- http://webprotege.stanford.edu/R7Qw7X74diNFDVTsbrqaVYD -->
-
-    <owl:Class rdf:about="http://webprotege.stanford.edu/R7Qw7X74diNFDVTsbrqaVYD">
-        <rdfs:subClassOf rdf:resource="http://webprotege.stanford.edu/R7fq8cnd5Woc73JFDgxlj8x"/>
-        <rdfs:label xml:lang=".ttl">CoreCourse</rdfs:label>
-    </owl:Class>
-    
-
-
-    <!-- http://webprotege.stanford.edu/R7fq8cnd5Woc73JFDgxlj8x -->
-
-    <owl:Class rdf:about="http://webprotege.stanford.edu/R7fq8cnd5Woc73JFDgxlj8x">
-        <rdfs:label xml:lang=".ttl">Program</rdfs:label>
-    </owl:Class>
-    
-
-
-    <!-- http://webprotege.stanford.edu/R8yseGjeRzWH7jPr1otDtbK -->
-
-    <owl:Class rdf:about="http://webprotege.stanford.edu/R8yseGjeRzWH7jPr1otDtbK">
-        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Course"/>
-        <rdfs:label xml:lang=".ttl">Exam</rdfs:label>
-    </owl:Class>
-    
-
-
-    <!-- http://webprotege.stanford.edu/R92plNXVBL45NH87f3Yal5J -->
-
-    <owl:Class rdf:about="http://webprotege.stanford.edu/R92plNXVBL45NH87f3Yal5J">
-        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Room"/>
-        <rdfs:label xml:lang=".ttl">Office</rdfs:label>
-    </owl:Class>
-    
-
-
-    <!-- http://webprotege.stanford.edu/R9Cvf9RoRSQKuTBuXAOINX1 -->
-
-    <owl:Class rdf:about="http://webprotege.stanford.edu/R9Cvf9RoRSQKuTBuXAOINX1">
-        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Course"/>
-        <rdfs:label xml:lang=".ttl">Syllabus</rdfs:label>
-    </owl:Class>
-    
-
-
-    <!-- http://webprotege.stanford.edu/RBZI98BVU63x0T74PG6jb9X -->
-
-    <owl:Class rdf:about="http://webprotege.stanford.edu/RBZI98BVU63x0T74PG6jb9X">
-        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Person"/>
-        <rdfs:label xml:lang=".ttl">AcademicAdvisor</rdfs:label>
-    </owl:Class>
-    
-
-
-    <!-- http://webprotege.stanford.edu/RBkOkbF4oeZ1nJ8WCSL34AS -->
-
-    <owl:Class rdf:about="http://webprotege.stanford.edu/RBkOkbF4oeZ1nJ8WCSL34AS">
-        <rdfs:label xml:lang=".ttl">ResearchGroup</rdfs:label>
-    </owl:Class>
-    
-
-
-    <!-- http://webprotege.stanford.edu/RCABq7LNWOI1OXNZ0W9Tyhh -->
-
-    <owl:Class rdf:about="http://webprotege.stanford.edu/RCABq7LNWOI1OXNZ0W9Tyhh">
-        <rdfs:label xml:lang=".ttl">Faculty</rdfs:label>
-    </owl:Class>
-    
-
-
-    <!-- http://webprotege.stanford.edu/RZA4dzoPUNSydRUWsJaJ4I -->
-
-    <owl:Class rdf:about="http://webprotege.stanford.edu/RZA4dzoPUNSydRUWsJaJ4I">
-        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Person"/>
-        <rdfs:label xml:lang=".ttl">Staff</rdfs:label>
-    </owl:Class>
-    
-
-
-    <!-- http://webprotege.stanford.edu/RaQxRZrFhmxCfuNOfH7I75 -->
-
-    <owl:Class rdf:about="http://webprotege.stanford.edu/RaQxRZrFhmxCfuNOfH7I75">
-        <rdfs:subClassOf rdf:resource="http://webprotege.stanford.edu/R7fq8cnd5Woc73JFDgxlj8x"/>
-        <rdfs:label xml:lang=".ttl">Thesis</rdfs:label>
-    </owl:Class>
-    
-
-
     <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Address -->
 
     <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Address"/>
@@ -210,9 +114,37 @@
     
 
 
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#CoreCourse -->
+
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#CoreCourse">
+        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Program"/>
+    </owl:Class>
+    
+
+
     <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Course -->
 
     <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Course"/>
+    
+
+
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#ElectiveCourse -->
+
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#ElectiveCourse">
+        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Program"/>
+    </owl:Class>
+    
+
+
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#ExamBoard -->
+
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#ExamBoard"/>
+    
+
+
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Faculty -->
+
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Faculty"/>
     
 
 
@@ -241,6 +173,14 @@
     <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#LectureRoom -->
 
     <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#LectureRoom">
+        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Room"/>
+    </owl:Class>
+    
+
+
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Office -->
+
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Office">
         <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Room"/>
     </owl:Class>
     
@@ -304,6 +244,20 @@
                 </owl:intersectionOf>
             </owl:Class>
         </rdfs:subClassOf>
+    </owl:Class>
+    
+
+
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Program -->
+
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Program"/>
+    
+
+
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#ResearchGroup -->
+
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#ResearchGroup">
+        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Faculty"/>
     </owl:Class>
     
 
@@ -391,6 +345,22 @@
     
 
 
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#TeachingStaff -->
+
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#TeachingStaff">
+        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Person"/>
+    </owl:Class>
+    
+
+
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Thesis -->
+
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Thesis">
+        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Program"/>
+    </owl:Class>
+    
+
+
     <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#TimeSlot -->
 
     <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#TimeSlot"/>
@@ -404,5 +374,5 @@
 
 
 
-<!-- Generated by the OWL API (version 4.5.13) https://github.com/owlcs/owlapi -->
+<!-- Generated by the OWL API (version 4.5.29.2024-05-13T12:11:03Z) https://github.com/owlcs/owlapi -->
 
