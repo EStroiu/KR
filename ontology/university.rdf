@@ -47,7 +47,9 @@
 
     <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#takes -->
 
-    <owl:ObjectProperty rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#takes"/>
+    <owl:ObjectProperty rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#takes">
+        <owl:inverseOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#teaches"/>
+    </owl:ObjectProperty>
     
 
 
@@ -77,6 +79,30 @@
     <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Address -->
 
     <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Address"/>
+    
+
+
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#AssessmentComponent -->
+
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#AssessmentComponent">
+        <owl:equivalentClass>
+            <owl:Class>
+                <owl:unionOf rdf:parseType="Collection">
+                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Assignment"/>
+                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Exam"/>
+                </owl:unionOf>
+            </owl:Class>
+        </owl:equivalentClass>
+        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Course"/>
+    </owl:Class>
+    
+
+
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Assignment -->
+
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Assignment">
+        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Course"/>
+    </owl:Class>
     
 
 
@@ -136,6 +162,14 @@
     
 
 
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Exam -->
+
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Exam">
+        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Course"/>
+    </owl:Class>
+    
+
+
     <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#ExamBoard -->
 
     <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#ExamBoard"/>
@@ -145,6 +179,26 @@
     <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Faculty -->
 
     <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Faculty"/>
+    
+
+
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#FullTimeStudent -->
+
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#FullTimeStudent">
+        <owl:equivalentClass>
+            <owl:Class>
+                <owl:intersectionOf rdf:parseType="Collection">
+                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Student"/>
+                    <owl:Restriction>
+                        <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#takes"/>
+                        <owl:minQualifiedCardinality rdf:datatype="http://www.w3.org/2001/XMLSchema#nonNegativeInteger">2</owl:minQualifiedCardinality>
+                        <owl:onClass rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Course"/>
+                    </owl:Restriction>
+                </owl:intersectionOf>
+            </owl:Class>
+        </owl:equivalentClass>
+        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Student"/>
+    </owl:Class>
     
 
 
@@ -189,6 +243,25 @@
     <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Person -->
 
     <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Person"/>
+    
+
+
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#PhDStudent -->
+
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#PhDStudent">
+        <owl:equivalentClass>
+            <owl:Class>
+                <owl:intersectionOf rdf:parseType="Collection">
+                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Student"/>
+                    <owl:Restriction>
+                        <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#in"/>
+                        <owl:someValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#ResearchGroup"/>
+                    </owl:Restriction>
+                </owl:intersectionOf>
+            </owl:Class>
+        </owl:equivalentClass>
+        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Student"/>
+    </owl:Class>
     
 
 
@@ -348,6 +421,14 @@
     <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#TeachingStaff -->
 
     <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#TeachingStaff">
+        <owl:equivalentClass>
+            <owl:Class>
+                <owl:unionOf rdf:parseType="Collection">
+                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Professor"/>
+                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#TA"/>
+                </owl:unionOf>
+            </owl:Class>
+        </owl:equivalentClass>
         <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/untitled-ontology-6#Person"/>
     </owl:Class>
     
