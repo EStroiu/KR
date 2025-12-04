@@ -29,7 +29,9 @@
 
     <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/university#at -->
 
-    <owl:ObjectProperty rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#at"/>
+    <owl:ObjectProperty rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#at">
+        <rdfs:subPropertyOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#in"/>
+    </owl:ObjectProperty>
     
 
 
@@ -41,7 +43,36 @@
 
     <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/university#in -->
 
-    <owl:ObjectProperty rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#in"/>
+    <owl:ObjectProperty rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#in">
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#TransitiveProperty"/>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/university#isCompulsoryFor -->
+
+    <owl:ObjectProperty rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#isCompulsoryFor">
+        <rdfs:subPropertyOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#offeredIn"/>
+        <rdfs:domain rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Course"/>
+        <rdfs:range rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Program"/>
+        <owl:propertyDisjointWith rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#isElectiveFor"/>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/university#isElectiveFor -->
+
+    <owl:ObjectProperty rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#isElectiveFor">
+        <rdfs:subPropertyOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#offeredIn"/>
+        <rdfs:domain rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Course"/>
+        <rdfs:range rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Program"/>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/university#offeredIn -->
+
+    <owl:ObjectProperty rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#offeredIn"/>
     
 
 
@@ -67,7 +98,9 @@
 
     <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/university#relatedTo -->
 
-    <owl:ObjectProperty rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#relatedTo"/>
+    <owl:ObjectProperty rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#relatedTo">
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#SymmetricProperty"/>
+    </owl:ObjectProperty>
     
 
 
@@ -105,6 +138,7 @@
     <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/university#credits -->
 
     <owl:DatatypeProperty rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#credits">
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
         <rdfs:range>
             <rdfs:Datatype>
                 <owl:onDatatype rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
@@ -146,6 +180,7 @@
             </owl:Restriction>
         </owl:equivalentClass>
         <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Person"/>
+        <owl:disjointWith rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Student"/>
     </owl:Class>
     
 
@@ -208,9 +243,9 @@
     
 
 
-    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/university#CoreCourse -->
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Course -->
 
-    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#CoreCourse">
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Course">
         <owl:equivalentClass>
             <owl:Class>
                 <owl:unionOf rdf:parseType="Collection">
@@ -218,20 +253,6 @@
                     <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#HalfCourse"/>
                 </owl:unionOf>
             </owl:Class>
-        </owl:equivalentClass>
-        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Program"/>
-    </owl:Class>
-    
-
-
-    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Course -->
-
-    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Course">
-        <owl:equivalentClass>
-            <owl:Restriction>
-                <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#credits"/>
-                <owl:someValuesFrom rdf:resource="http://www.w3.org/2002/07/owl#rational"/>
-            </owl:Restriction>
         </owl:equivalentClass>
         <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Program"/>
     </owl:Class>
@@ -258,6 +279,17 @@
 
     <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Exam">
         <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Course"/>
+        <rdfs:subClassOf>
+            <owl:Class>
+                <owl:intersectionOf rdf:parseType="Collection">
+                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#AssessmentComponent"/>
+                    <owl:Restriction>
+                        <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#processedBy"/>
+                        <owl:allValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Professor"/>
+                    </owl:Restriction>
+                </owl:intersectionOf>
+            </owl:Class>
+        </rdfs:subClassOf>
     </owl:Class>
     
 
@@ -536,6 +568,23 @@
             </owl:Class>
         </owl:equivalentClass>
         <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Person"/>
+        <rdfs:subClassOf>
+            <owl:Class>
+                <owl:intersectionOf rdf:parseType="Collection">
+                    <owl:Restriction>
+                        <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#takes"/>
+                        <owl:minQualifiedCardinality rdf:datatype="http://www.w3.org/2001/XMLSchema#nonNegativeInteger">1</owl:minQualifiedCardinality>
+                        <owl:onClass rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Course"/>
+                    </owl:Restriction>
+                    <owl:Restriction>
+                        <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#takes"/>
+                        <owl:maxQualifiedCardinality rdf:datatype="http://www.w3.org/2001/XMLSchema#nonNegativeInteger">8</owl:maxQualifiedCardinality>
+                        <owl:onClass rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Course"/>
+                    </owl:Restriction>
+                </owl:intersectionOf>
+            </owl:Class>
+        </rdfs:subClassOf>
+        <owl:disjointWith rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#TeachingStaff"/>
     </owl:Class>
     
 
@@ -598,6 +647,17 @@
 
     <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Thesis">
         <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Program"/>
+        <rdfs:subClassOf>
+            <owl:Class>
+                <owl:intersectionOf rdf:parseType="Collection">
+                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Assignment"/>
+                    <owl:Restriction>
+                        <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#processedBy"/>
+                        <owl:someValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#ResearchGroup"/>
+                    </owl:Restriction>
+                </owl:intersectionOf>
+            </owl:Class>
+        </rdfs:subClassOf>
     </owl:Class>
     
 
