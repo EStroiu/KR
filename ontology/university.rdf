@@ -619,6 +619,27 @@
     
 
 
+    <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/university#PartOfJob -->
+
+    <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#PartOfJob">
+        <owl:equivalentClass>
+            <owl:Restriction>
+                <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#processedBy"/>
+                <owl:allValuesFrom>
+                    <owl:Class>
+                        <owl:unionOf rdf:parseType="Collection">
+                            <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Admin"/>
+                            <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Professor"/>
+                            <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#TA"/>
+                        </owl:unionOf>
+                    </owl:Class>
+                </owl:allValuesFrom>
+            </owl:Restriction>
+        </owl:equivalentClass>
+    </owl:Class>
+    
+
+
     <!-- http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Person -->
 
     <owl:Class rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Person"/>
