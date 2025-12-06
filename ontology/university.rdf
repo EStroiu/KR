@@ -498,18 +498,17 @@
         <owl:equivalentClass>
             <owl:Class>
                 <owl:intersectionOf rdf:parseType="Collection">
-                    <owl:Class>
-                        <owl:unionOf rdf:parseType="Collection">
-                            <owl:Restriction>
-                                <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#relatedTo"/>
-                                <owl:someValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Student"/>
-                            </owl:Restriction>
-                            <owl:Restriction>
-                                <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#relatedTo"/>
-                                <owl:someValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#TeachingStaff"/>
-                            </owl:Restriction>
-                        </owl:unionOf>
-                    </owl:Class>
+                    <owl:Restriction>
+                        <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#relatedTo"/>
+                        <owl:someValuesFrom>
+                            <owl:Class>
+                                <owl:unionOf rdf:parseType="Collection">
+                                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Student"/>
+                                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#TeachingStaff"/>
+                                </owl:unionOf>
+                            </owl:Class>
+                        </owl:someValuesFrom>
+                    </owl:Restriction>
                     <owl:Restriction>
                         <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#processedBy"/>
                         <owl:allValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Admin"/>
@@ -688,18 +687,17 @@
         <owl:equivalentClass>
             <owl:Class>
                 <owl:intersectionOf rdf:parseType="Collection">
-                    <owl:Class>
-                        <owl:unionOf rdf:parseType="Collection">
-                            <owl:Restriction>
-                                <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#teaches"/>
-                                <owl:someValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Lecture"/>
-                            </owl:Restriction>
-                            <owl:Restriction>
-                                <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#teaches"/>
-                                <owl:someValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Practical"/>
-                            </owl:Restriction>
-                        </owl:unionOf>
-                    </owl:Class>
+                    <owl:Restriction>
+                        <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#teaches"/>
+                        <owl:someValuesFrom>
+                            <owl:Class>
+                                <owl:unionOf rdf:parseType="Collection">
+                                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Lecture"/>
+                                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Practical"/>
+                                </owl:unionOf>
+                            </owl:Class>
+                        </owl:someValuesFrom>
+                    </owl:Restriction>
                     <owl:Restriction>
                         <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#relatedTo"/>
                         <owl:minQualifiedCardinality rdf:datatype="http://www.w3.org/2001/XMLSchema#nonNegativeInteger">1</owl:minQualifiedCardinality>
@@ -766,21 +764,20 @@
         <owl:equivalentClass>
             <owl:Class>
                 <owl:intersectionOf rdf:parseType="Collection">
-                    <owl:Class>
-                        <owl:unionOf rdf:parseType="Collection">
-                            <owl:Restriction>
-                                <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#signedUpFor"/>
-                                <owl:someValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Lecture"/>
-                            </owl:Restriction>
-                            <owl:Restriction>
-                                <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#signedUpFor"/>
-                                <owl:someValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Practical"/>
-                            </owl:Restriction>
-                        </owl:unionOf>
-                    </owl:Class>
                     <owl:Restriction>
                         <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#signedUpFor"/>
                         <owl:someValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#AssessmentComponent"/>
+                    </owl:Restriction>
+                    <owl:Restriction>
+                        <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#signedUpFor"/>
+                        <owl:someValuesFrom>
+                            <owl:Class>
+                                <owl:unionOf rdf:parseType="Collection">
+                                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Lecture"/>
+                                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Practical"/>
+                                </owl:unionOf>
+                            </owl:Class>
+                        </owl:someValuesFrom>
                     </owl:Restriction>
                 </owl:intersectionOf>
             </owl:Class>
@@ -812,26 +809,21 @@
         <owl:equivalentClass>
             <owl:Class>
                 <owl:intersectionOf rdf:parseType="Collection">
-                    <owl:Class>
-                        <owl:intersectionOf rdf:parseType="Collection">
+                    <owl:Restriction>
+                        <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#signedUpFor"/>
+                        <owl:someValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#AssessmentComponent"/>
+                    </owl:Restriction>
+                    <owl:Restriction>
+                        <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#signedUpFor"/>
+                        <owl:someValuesFrom>
                             <owl:Class>
                                 <owl:unionOf rdf:parseType="Collection">
-                                    <owl:Restriction>
-                                        <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#signedUpFor"/>
-                                        <owl:someValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Lecture"/>
-                                    </owl:Restriction>
-                                    <owl:Restriction>
-                                        <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#signedUpFor"/>
-                                        <owl:someValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Practical"/>
-                                    </owl:Restriction>
+                                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Lecture"/>
+                                    <rdf:Description rdf:about="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Practical"/>
                                 </owl:unionOf>
                             </owl:Class>
-                            <owl:Restriction>
-                                <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#signedUpFor"/>
-                                <owl:someValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#AssessmentComponent"/>
-                            </owl:Restriction>
-                        </owl:intersectionOf>
-                    </owl:Class>
+                        </owl:someValuesFrom>
+                    </owl:Restriction>
                     <owl:Restriction>
                         <owl:onProperty rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#teaches"/>
                         <owl:someValuesFrom rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Practical"/>
@@ -855,7 +847,6 @@
                 </owl:unionOf>
             </owl:Class>
         </owl:equivalentClass>
-        <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/ricardo/ontologies/2025/10/university#Person"/>
     </owl:Class>
     
 
